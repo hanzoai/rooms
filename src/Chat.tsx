@@ -44,7 +44,8 @@ import {
   hasConsent,
   isFree,
 } from "@hanzo/ai";
-import { ASK, Chat as ChatSurface, Code, Failure } from "@hanzo/ui/chat";
+import { ASK, Chat as ChatSurface, Code, Failure, Parts, words, type Said } from "@hanzo/ui/chat";
+import { compose, hold, images, partsOf, type Held } from "./lib/attach";
 import { Face, brief as roomBrief, join, roleOf, roomTurn, roster as rosterLine, rosterOf, speakers, speaksOf, voiceOf } from "./cast";
 import { SpeakButton, speakAgent } from "./speech";
 import { Crew, HOUSE, useCrew } from "./crew";
@@ -59,7 +60,7 @@ import { useHydrated } from "./lib/hydrated";
 import { base, served } from "./lib/ai";
 import { onServed, type Served } from "./lib/served";
 import { speech, useVoice, Voice } from "@hanzo/voice";
-import { ArrowUp, Mic, Square, Star, PanelRight, X } from "lucide-react";
+import { ArrowUp, Mic, Paperclip, Square, Star, PanelRight, X } from "lucide-react";
 import { ENSO, FREE } from "./lib/ai";
 import { openThread, showSettings, useOpen } from "./open";
 import { Beside, Framed } from "./Shell";
@@ -74,7 +75,7 @@ import { checkoutUrl, onFree, planName } from './lib/plans';
 import { Upgrade, useFree, type Ask } from './Upgrade';
 import { enter, LOGIN } from './lib/destination';
 import { first } from './lib/first';
-import { mix } from "./lib/mix";
+import { BAD, mix } from "./lib/mix";
 import { site } from './where'
 
 /** The veil under the free lane's consent sheet. */
@@ -688,13 +689,31 @@ function Thread({
   // identity changes on every `setMessages` — `useChat` closes over `messages` —
   // so an effect depending on it re-runs after each streamed token.
   const latest = useRef(send);
-  latest.current = send;
+  // The images held for a turn ride with it at the moment it is sent, queued or
+  // not, and are spent once: a retry is the words again, not the pictures.
+  latest.current = (text: string) => send(text, outgoing.current.splice(0));
 
   // THE COMPOSER'S DRAFT IS HELD HERE, so an arriving question can be typed into
   // it. `Chat` owns a draft of its own and spreads `composer` after it, so
   // passing value/onChange/onSend takes that ownership over rather than fighting
   // it.
   const [draft, setDraft] = useState("");
+  // FILES WITH THE NEXT MESSAGE: pressed in through the paperclip, or dropped
+  // anywhere on the room. An image rides as a picture the model reads, a text
+  // file as its words (lib/attach); anything else is refused by name here.
+  const [files, setFiles] = useState<Held[]>([]);
+  const [fileSaid, setFileSaid] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const picker = useRef<HTMLInputElement | null>(null);
+  const outgoing = useRef<string[]>([]);
+  const depth = useRef(0);
+  const take = useCallback(async (list: FileList | readonly File[] | null | undefined) => {
+    if (!list?.length) return;
+    const out = await Promise.all(Array.from(list).map(hold));
+    setFiles((now) => [...now, ...out.filter((one): one is Held => typeof one !== "string")]);
+    const refused = out.filter((one): one is string => typeof one === "string");
+    setFileSaid(refused.length ? refused.join(" ") : null);
+  }, []);
   useSeed(initial, setDraft);
 
   // DICTATION, the same one the site's own composer offers. `speech()` defaults
@@ -892,6 +911,17 @@ function Thread({
     [model, speak],
   );
 
+  /** The draft and the held files, sent as one turn. */
+  const submit = () => {
+    const text = draft.trim();
+    if (!text && !files.length) return;
+    outgoing.current = images(files);
+    setDraft("");
+    setFiles([]);
+    setFileSaid(null);
+    guarded(compose(text, files));
+  };
+
   /*
     WHAT AN UNANSWERED QUESTION LOOKS LIKE: a turn of its own directly under it,
     naming who was asked, saying what went wrong in the reader's words, and
@@ -922,7 +952,7 @@ function Thread({
 
   const failure = (question: ChatMessage) => {
     const failed = failures[question.id];
-    const text = String(question.content ?? "");
+    const text = words(question.content as Said);
     const whom = addressed(text, room);
     const wrong = failed?.error ?? null;
     const how = wrong ? refusalOf(wrong) : null;
@@ -1025,7 +1055,59 @@ function Thread({
     );
 
   return (
-    <YStack flex={1} minH={0} width="100%" position="relative">
+    <YStack
+      flex={1}
+      minH={0}
+      width="100%"
+      position="relative"
+      data-slot="chat-room"
+      // Entered and left once for every child crossed, so the veil follows a
+      // count rather than the last event.
+      onDragEnter={(e: React.DragEvent) => {
+        if (!Array.from(e.dataTransfer.types).includes("Files")) return;
+        depth.current += 1;
+        setDragging(true);
+      }}
+      onDragOver={(e: React.DragEvent) => {
+        if (!Array.from(e.dataTransfer.types).includes("Files")) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+      }}
+      onDragLeave={() => {
+        depth.current = Math.max(0, depth.current - 1);
+        if (depth.current === 0) setDragging(false);
+      }}
+      onDrop={(e: React.DragEvent) => {
+        depth.current = 0;
+        setDragging(false);
+        if (!e.dataTransfer.files?.length) return;
+        e.preventDefault();
+        void take(e.dataTransfer.files);
+      }}
+    >
+      {dragging ? (
+        <YStack
+          aria-hidden
+          position="absolute"
+          t={0}
+          r={0}
+          b={0}
+          l={0}
+          z={10}
+          items="center"
+          justify="center"
+          bg="var(--surface-scrim)"
+          borderWidth={2}
+          borderStyle="dashed"
+          borderColor="$borderColor"
+          rounded="var(--pane-round)"
+          pointerEvents="none"
+        >
+          <Text fontSize="$4" color="$ink">
+            Drop to attach
+          </Text>
+        </YStack>
+      ) : null}
       {/* The conversation's own row: its star, who is in it, and its address. */}
       <XStack
         height={48}
@@ -1208,12 +1290,15 @@ function Thread({
             const question = shown.find((one) => one.id === String(turn.id).slice(FAILED.length + 1));
             return question ? failure(question) : null;
           }
+          // A QUESTION THAT CARRIED PICTURES draws them beside its words.
+          if (turn.role === "user" && Array.isArray(turn.content))
+            return <Parts parts={partsOf(turn.content)} prose={(text) => <Prose text={text} />} />;
           const said = typeof turn.content === "string" ? turn.content : "";
           // WHO IS ANSWERING, while the answer has no words yet: the agents the
           // question addresses, or the whole room when it names nobody.
           if (turn.role === "assistant" && !said && chat.streaming && room.length) {
             const q = [...shown].reverse().find((one) => one.role === "user");
-            const whom = addressed(String(q?.content ?? ""), room);
+            const whom = addressed(words(q?.content as Said), room);
             return (
               <Text fontSize="$2" color="$soft">
                 {join(whom)} {whom.length > 1 ? "are" : "is"} answering…
@@ -1231,7 +1316,7 @@ function Thread({
             const q = shown.slice(0, at).reverse().find((one) => one.role === "user");
             const silent =
               room.length > 1 && !(chat.streaming && at === shown.length - 1)
-                ? addressed(String(q?.content ?? ""), room).filter(
+                ? addressed(words(q?.content as Said), room).filter(
                     (name) => !parts.some((part) => part.who?.toLowerCase() === name.toLowerCase()),
                   )
                 : [];
@@ -1408,12 +1493,7 @@ function Thread({
         composer={{
           value: draft,
           onChange: setDraft,
-          onSend: () => {
-            const text = draft.trim();
-            if (!text) return;
-            setDraft("");
-            guarded(text);
-          },
+          onSend: submit,
           // A CHARACTER IS WHO YOU ARE WRITING TO, so the field says so — and
           // `label` keeps the accessible name constant while it does, which is
           // the reason the component ships both: a placeholder that changes with
@@ -1463,6 +1543,73 @@ function Thread({
           // package's button and `streaming` still has to become stop; it keeps
           // `data-slot="composer-send"` so a driver finds it, and it is the same
           // `Control` circle as the mic, filled.
+          // THE PAPERCLIP opens the file picker; the same files can be dropped on
+          // the room.
+          children: (
+            <>
+              <Control type="button" size={ROUND} aria-label="Attach files" onClick={() => picker.current?.click()}>
+                <Paperclip size={15} aria-hidden />
+              </Control>
+              <input
+                ref={picker}
+                type="file"
+                multiple
+                hidden
+                data-slot="composer-files"
+                onChange={(e) => {
+                  void take(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+            </>
+          ),
+          // WHAT GOES WITH THE MESSAGE, above the frame: one chip a file, each
+          // with its own remove, and the reason any file was refused.
+          head:
+            files.length || fileSaid ? (
+              <YStack width="calc(100% - 32px)" maxW={`calc(${MEASURE} - 3rem)`} mx="auto" gap="$1.5">
+                {files.length ? (
+                  <XStack gap="$1.5" flexWrap="wrap" role="list" aria-label="Attached files" data-slot="composer-attached">
+                    {files.map((one) => (
+                      <XStack
+                        key={one.id}
+                        role="listitem"
+                        items="center"
+                        gap="$1.5"
+                        pl="$2.5"
+                        pr="$1"
+                        py="$1"
+                        rounded="$10"
+                        borderWidth={1}
+                        borderColor="$borderColor"
+                        bg="$hover"
+                        maxW={260}
+                      >
+                        <Paperclip size={12} aria-hidden color="var(--muted-foreground)" />
+                        <Text fontSize="$2" color="$ink" numberOfLines={1}>
+                          {one.name}
+                        </Text>
+                        <Box
+                          render="button"
+                          aria-label={`Remove ${one.name}`}
+                          onClick={() => setFiles((now) => now.filter((f) => f.id !== one.id))}
+                          p="$1"
+                          rounded="$10"
+                          hoverStyle={{ bg: "$raised" }}
+                        >
+                          <X size={12} aria-hidden />
+                        </Box>
+                      </XStack>
+                    ))}
+                  </XStack>
+                ) : null}
+                {fileSaid ? (
+                  <Text role="alert" fontSize="$2" color={BAD}>
+                    {fileSaid}
+                  </Text>
+                ) : null}
+              </YStack>
+            ) : undefined,
           send: (
             <XStack items="center" gap="$2">
               <Enso
@@ -1488,14 +1635,8 @@ function Thread({
                 fill
                 data-slot="composer-send"
                 aria-label={chat.streaming ? "Stop" : "Send"}
-                opacity={chat.streaming || draft.trim() ? 1 : 0.4}
-                onClick={() => {
-                  if (chat.streaming) return chat.stop();
-                  const text = draft.trim();
-                  if (!text) return;
-                  setDraft("");
-                  guarded(text);
-                }}
+                opacity={chat.streaming || draft.trim() || files.length ? 1 : 0.4}
+                onClick={() => (chat.streaming ? chat.stop() : submit())}
               >
                 {chat.streaming ? (
                   <Square size={13} fill="currentColor" />
