@@ -39,7 +39,7 @@
   },
   "scripts": {
     "gen": "node scripts/team.mjs",
-    "build": "rm -rf dist && node scripts/team.mjs && tsc -p tsconfig.build.json",
+    "build": "rm -rf dist && node scripts/team.mjs && tsc -p tsconfig.build.json && node scripts/specifiers.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "prepack": "pnpm run build"
