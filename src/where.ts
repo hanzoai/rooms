@@ -9,7 +9,6 @@
  */
 import type { ComponentType } from 'react'
 import type { BillingPlan } from './lib/plans'
-import type { Integration } from './lib/integrations'
 
 /** The addresses a host serves from, which plain modules read. */
 export interface Addresses {
@@ -37,12 +36,6 @@ export interface Addresses {
   key?: string
   /** The plan catalogue as the host's build last read it: the first paint. */
   plans?: BillingPlan[]
-  /**
-   * The SDKs and frameworks Directory lists, which the host publishes. A loader,
-   * so the catalogue — every guide's code, and the model counts it quotes — is
-   * fetched when Directory's Apps tab opens, not on every page the rooms frame.
-   */
-  integrations?: () => Promise<Integration[]>
   /**
    * The host's front door, for a workspace rooted at `/` (hanzo.team): what a
    * stranger at Home is shown instead of the sign-in, and the business sign-up

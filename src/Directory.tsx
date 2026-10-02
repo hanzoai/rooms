@@ -54,7 +54,6 @@ import {
 } from '@hanzo/ui'
 import { Grid } from '@hanzo/ui/grid'
 import { useIam } from '@hanzo/iam/react'
-import { where } from './where'
 import { ProviderMark } from './ProviderMark'
 import { say } from './failure'
 import { api } from './lib/api'
@@ -129,12 +128,16 @@ interface Row {
  */
 const LEAD = ['tiktok', 'instagram', 'linkedin', 'slack', 'x', 'whatsapp', 'discord', 'telegram', 'facebook', 'teams', 'threads', 'youtube']
 
-/** The host's published integrations, as directory rows. Real, public, counted. Read once. */
+/**
+ * The published integrations (lib/integrations), as directory rows. Real,
+ * public, counted. Loaded when the tab first opens, so a page the rooms frame
+ * carries none of the catalogue's guides.
+ */
 let listing: Promise<Row[]> | null = null
 const apps = (): Promise<Row[]> =>
-  (listing ??= (where().integrations?.() ?? Promise.resolve([]))
-    .then((all) =>
-      all.map((i): Row => ({
+  (listing ??= import('./lib/integrations')
+    .then(({ INTEGRATIONS }) =>
+      INTEGRATIONS.map((i): Row => ({
         id: i.slug,
         name: i.name,
         publisher: i.creator,
