@@ -42,7 +42,8 @@
     "build": "rm -rf dist && node scripts/team.mjs && tsc -p tsconfig.build.json && node scripts/specifiers.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
-    "prepack": "pnpm run build"
+    "prepack": "pnpm run build",
+    "lint:design": "hanzo-design-lint src"
   },
   "license": "Apache-2.0 OR MIT",
   "dependencies": {

@@ -7,6 +7,7 @@ test:
       corepack enable
       pnpm install --frozen-lockfile
       pnpm typecheck
+      pnpm lint:design
       pnpm test
       pnpm build
       test -s dist/index.js

@@ -61,6 +61,7 @@ jobs:
           set -euo pipefail
           pnpm install --frozen-lockfile
           pnpm typecheck
+          pnpm lint:design
           pnpm test
           pnpm build
           test -s dist/index.js
