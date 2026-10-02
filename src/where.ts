@@ -26,6 +26,8 @@ export interface Addresses {
   home: string
   /** Where a new account starts: `/signup`, or hanzo.team's `/start`. */
   signUp: string
+  /** The product's name where the rooms print it: Home's title, the setup's wordmark. Default `Hanzo`. */
+  brand?: string
   /** The publishable key anonymous calls carry. */
   key?: string
   /** The plan catalogue as the host's build last read it: the first paint. */
@@ -43,6 +45,18 @@ export interface Addresses {
    */
   Landing?: ComponentType<{ member?: boolean }>
   Signup?: ComponentType
+  /**
+   * The rooms are hanzo.team's: every room is behind the per-seat Team plan,
+   * and an organization is founded through the team's setup, never the create
+   * dialog a person on hanzo.ai uses.
+   */
+  team?: boolean
+  /**
+   * The host's funnel call, for a host that counts moments in tags of its own
+   * (hanzo.team's GA4 and Pixel boot). Unset, a moment goes to @hanzo/event's
+   * tag manager.
+   */
+  track?: (name: string, params: Record<string, unknown>) => void
 }
 
 let addresses: Addresses = { site: '', home: '/home', signUp: '/signup' }

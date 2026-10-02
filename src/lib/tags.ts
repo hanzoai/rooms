@@ -11,6 +11,7 @@
  */
 
 import { mirror, startTags, tagsReady, track as fire, visit, type Analytics } from '@hanzo/event'
+import { where } from '../where'
 
 export { mirror, startTags, tagsReady, visit }
 
@@ -48,7 +49,9 @@ export function authorize(url: string): string {
   return stream ? stream.authorize(url) : url
 }
 
-/** One funnel moment, to every place it is counted, under one event_id. */
+/** One funnel moment, to every place it is counted, under one event_id: the host's own call where it states one. */
 export function track(name: string, params: Record<string, unknown> = {}): void {
-  fire(stream, name, params)
+  const own = where().track
+  if (own) own(name, params)
+  else fire(stream, name, params)
 }

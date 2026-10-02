@@ -76,9 +76,10 @@ export function Orgs({
 }) {
   const hydrated = useHydrated()
   const { isAuthenticated, isLoading, accessToken } = useIam()
-  const { Landing, Signup } = where()
-  // The front door's own flow: naming a team, inviting it, the per-seat plan.
-  const door = front || signup
+  const { Landing, Signup, team } = where()
+  // The front door's own flow: naming a team, inviting it, the per-seat plan —
+  // at hanzo.ai's Home and /start, and in every room of hanzo.team.
+  const door = front || signup || Boolean(team)
   const arriving = useArrival(door, hydrated, isLoading, isAuthenticated)
   const members = useMemo(() => claimed(), [accessToken]) // eslint-disable-line react-hooks/exhaustive-deps
   const [current, setCurrent] = useState<string | null>(() => org())
@@ -348,7 +349,7 @@ function Step({ at, of }: { at: number; of: number }) {
 function Brand() {
   return (
     <Text fontSize="$6" fontWeight="500" mb={28} color="var(--foreground)">
-      Hanzo
+      {where().brand ?? 'Hanzo'}
     </Text>
   )
 }

@@ -246,7 +246,9 @@ const HOME: Place = {
   get route() {
     return where().home;
   },
-  title: "Hanzo",
+  get title() {
+    return where().brand ?? "Hanzo";
+  },
   label: "Home",
   // The chat bubble. Home IS the conversation with the org — the rooms it talks
   // in and the people in them — so it is drawn as one. It shared this glyph with
