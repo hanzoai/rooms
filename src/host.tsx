@@ -71,9 +71,14 @@ export interface Addresses {
 
 let addresses: Addresses = { site: '', home: '/home', signUp: '/signup' }
 
-/** State the host's addresses. Called once, at module scope, by the host's root. */
-export function configure(given: Addresses): void {
-  addresses = given
+/**
+ * State the host's addresses, at module scope, before anything renders. Each
+ * call adds to what is stated, so a host can name its cheap addresses at its
+ * root and the heavy ones (the plan catalogue, the integrations) only where the
+ * rooms are drawn.
+ */
+export function configure(given: Partial<Addresses>): void {
+  addresses = { ...addresses, ...given }
 }
 
 /** The host's addresses, for code that runs outside a component. */
