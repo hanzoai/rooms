@@ -23,8 +23,8 @@ Two halves, because two kinds of caller read them.
 ```ts
 // Once, at module scope, in a module the host's root imports (pure: where.ts).
 import { configure } from '@hanzo/rooms'
-configure({ site: '', home: '/home', signUp: '/signup', api, iam, key })
-configure({ plans, integrations })       // only where the rooms draw — heavy
+configure({ site: '', home: '/home', signUp: '/signup', api, iam, key, plans })
+configure({ integrations: () => import('@/lib/integrations').then((m) => m.INTEGRATIONS) })
 ```
 
 ```tsx
@@ -38,9 +38,13 @@ configure({ plans, integrations })       // only where the rooms draw — heavy
 |---|---|---|
 | `site` — where the app's pages live (`/dev`, `/legal/*`, `/pricing`) | `''` | `https://hanzo.ai` |
 | `home` — the rooms' Home | `/home` | `/` |
+| `brand` — the product's name, on Home and the setup | `Hanzo` (default) | `Hanzo Team` |
 | `signUp` | `/signup` | `/start` |
 | `Landing`, `Signup` — the front door of a workspace rooted at `/` | — | team's components |
-| `plans`, `integrations` — first-paint catalogue, Directory's apps | build data | build data |
+| `team` — every room behind the per-seat Team plan, organizations founded through `Start` | — | `true` |
+| `track` — the host's own funnel call, where it boots its own tags | — (@hanzo/event's tag manager) | `lib/analytics/tags` |
+| `plans` — the first-paint plan catalogue | build data | — |
+| `integrations` — a loader for Directory's Apps tab, so the catalogue (every guide's code, and the model counts it quotes) loads when the tab opens | `lib/integrations` | `lib/integrations` |
 
 - Plain modules read addresses through `where()` / `site()` and must import
   them from `./where`, never `./host`: `host.tsx` is `'use client'`, and a
@@ -57,6 +61,9 @@ configure({ plans, integrations })       // only where the rooms draw — heavy
   is imported.
 - Navigation to another origin (`site()` on hanzo.team) is a document load in
   `Room`; same-origin routes go through the host's router.
+- A module a server page renders (`ProviderMark`) carries no `'use client'` and
+  imports gui primitives from `./ui`, never `@hanzo/ui`: the root barrel would
+  register its whole client surface on the route (81 KB on a model page).
 
 ## Layout
 
