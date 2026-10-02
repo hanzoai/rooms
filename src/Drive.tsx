@@ -901,6 +901,7 @@ export function Drive() {
                 <View
                   display="grid"
                   gridTemplateColumns={FILES}
+                  minW="min-content"
                   px={16}
                   py={10}
                   borderBottomWidth={1}
@@ -927,6 +928,7 @@ export function Drive() {
                         key={e.key}
                         display="grid"
                         gridTemplateColumns={FILES}
+                        minW="min-content"
                         px={16}
                         py={11}
                         items="center"
@@ -1076,6 +1078,7 @@ export function Drive() {
                   <View
                     display="grid"
                     gridTemplateColumns={PROJECTS}
+                    minW="min-content"
                     px={16}
                     py={10}
                     borderBottomWidth={1}
@@ -1104,6 +1107,7 @@ export function Drive() {
                         }}
                         display="grid"
                         gridTemplateColumns={PROJECTS}
+                        minW="min-content"
                         px={16}
                         py={11}
                         items="center"
