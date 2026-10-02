@@ -26,10 +26,12 @@
       "types": "./dist/bots/*.d.ts",
       "import": "./dist/bots/*.js",
       "default": "./dist/bots/*.js"
-    }
+    },
+    "./assets/*": "./assets/*"
   },
   "files": [
     "dist",
+    "assets",
     "LICENSE-APACHE",
     "LICENSE-MIT"
   ],
