@@ -173,7 +173,7 @@ function Arrivals({
         <Connect />
       </XStack>
 
-      <YStack flex={1} minH={0} overflow="scroll">
+      <YStack flex={1} minH={0} overflowY="auto" overflowX="hidden">
         {/* ALREADY SORTED, by the one function that holds both sources — a
             second sort here would be a second answer to "which is newest", and
             the two would disagree the moment one of them learned about a unit. */}
@@ -292,7 +292,7 @@ function Reading({
         </XStack>
       </ChannelHeader>
 
-      <YStack flex={1} minH={0} overflow="scroll" p="$4" gap="$3">
+      <YStack flex={1} minH={0} overflowY="auto" overflowX="hidden" p="$4" gap="$3">
         {/* Oldest first, so a conversation reads down the way it happened. The
             page arrives newest-first because that is how a cursor pages. */}
         {[...room.messages]

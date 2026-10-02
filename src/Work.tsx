@@ -216,7 +216,7 @@ function Watching({ idle }: { idle?: ReactNode }) {
 function Idle({ runs }: { runs: number }) {
   if (runs === 0) {
     return (
-      <YStack flex={1} minH={0} overflow="scroll">
+      <YStack flex={1} minH={0} overflowY="auto" overflowX="hidden">
         <YStack
           width="100%"
           maxW={640}
@@ -332,7 +332,7 @@ function Watch({ id }: { id: string }) {
         <XStack px="$4" pb="$2">
           <Bar run={session} />
         </XStack>
-        <YStack flex={1} minH={0} overflow="scroll" p="$4" gap="$4">
+        <YStack flex={1} minH={0} overflowY="auto" overflowX="hidden" p="$4" gap="$4">
           <ProgressBlock steps={shown} done={finished}>
             {message ? (
               <Text fontSize="$4" color="$ink">

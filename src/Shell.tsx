@@ -1563,7 +1563,10 @@ export function Paned({
           style={beside.style}
           position="relative"
           width="var(--span)"
-          maxW="50%"
+          // Half the WINDOW. Half of an `auto` grid track is half of this
+          // column's own width, so the rooms' shell drew it at half its span
+          // beside an empty strip of the same size.
+          maxW="50vw"
           shrink={0}
           minH={0}
           display="none"
@@ -1589,7 +1592,7 @@ export function Paned({
           <YStack
             flex={1}
             minH={0}
-            overflow="scroll"
+            overflowY="auto" overflowX="hidden"
             rounded="var(--pane-round)"
             ref={(el) => setSlot(el instanceof HTMLElement ? el : null)}
           />

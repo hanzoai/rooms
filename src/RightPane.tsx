@@ -222,7 +222,11 @@ export function RightPane({
   const pane = usePane(at)
 
   return (
-    <YStack flex={1} minH={0} bg="$background" borderLeftWidth={1} borderColor="$borderColor">
+    // A FLOOR, NOT ZERO. The column scrolls the panel and the work under it as
+    // one; a panel let shrink to nothing in a short column kept drawing its
+    // contents, so the tab strip's + sat on the answering model and the empty
+    // viewer on the headings below. At its floor the column scrolls instead.
+    <YStack flex={1} minH={320} bg="$background" borderLeftWidth={1} borderColor="$borderColor">
       {pane.pinned ? <Summary at={at} said={said} held={pane.held} /> : null}
       <Browser at={at} pane={pane} onClose={onClose} />
     </YStack>
@@ -244,7 +248,7 @@ function Summary({ at, said, held }: { at: string; said: ChatMessage[]; held: He
       // do not reserve a screen and thirty do not push the browser off the
       // bottom of the column.
       maxH="45%"
-      overflow="scroll"
+      overflowY="auto" overflowX="hidden"
       p="$3"
       gap="$3"
       borderBottomWidth={1}
@@ -539,7 +543,7 @@ function Browser({
         items="center"
         gap="$1"
         px="$2"
-        overflow="scroll"
+        overflowX="auto" overflowY="hidden"
         borderBottomWidth={1}
         borderColor="$borderColor"
       >
@@ -738,7 +742,7 @@ function Preview({ leaf, held }: { leaf: Leaf; held: Held[] }) {
 
   if (type.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'svg'].includes(ext)) {
     return (
-      <YStack flex={1} minH={0} items="center" justify="center" p="$3" overflow="scroll">
+      <YStack flex={1} minH={0} items="center" justify="center" p="$3" overflowY="auto" overflowX="hidden">
         <View render={<img src={leaf.url} alt={leaf.title} />} maxW="100%" maxH="100%" objectFit="contain" />
       </YStack>
     )

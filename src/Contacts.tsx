@@ -371,7 +371,7 @@ function Roster({ owner }: { owner: string }) {
       {unlisted ? <Note>{say(unlisted, 'the agent presets')}</Note> : null}
       {wrong ? <Note>{wrong}</Note> : null}
 
-      <YStack flex={1} minH={0} overflow="scroll">
+      <YStack flex={1} minH={0} overflowY="auto" overflowX="hidden">
         {waiting && shown.length === 0 ? (
           <Note>Reading your directory.</Note>
         ) : shown.length === 0 ? (

@@ -347,7 +347,7 @@ export function Boxes() {
           work, and billed for the hours it is held.
         </Empty>
       ) : (
-        <YStack flex={1} minH={0} overflow="scroll" p="$4" gap="$3">
+        <YStack flex={1} minH={0} overflowY="auto" overflowX="hidden" p="$4" gap="$3">
           {boxes.map((box) => (
             <Row
               key={box.id}

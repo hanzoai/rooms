@@ -215,7 +215,7 @@ export function SettingsPane({ id }: { id: string }) {
   const row = ROWS.find((r) => r.id === id)
 
   return (
-    <YStack flex={1} minH={0} overflow="scroll">
+    <YStack flex={1} minH={0} overflowY="auto" overflowX="hidden">
       <YStack p="$5" gap="$4" maxW={860}>
         <Text fontSize="$6" fontWeight="600" color="$ink">
           {row?.label ?? 'Settings'}

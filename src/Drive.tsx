@@ -784,7 +784,7 @@ export function Drive() {
         </YStack>
 
         {/* Main Content Area */}
-        <YStack flex={1} minH={0} px="$6" py="$5" overflow="scroll" gap="$5">
+        <YStack flex={1} minH={0} px="$6" py="$5" overflowY="auto" overflowX="hidden" gap="$5">
           {/* Breadcrumb / Location Bar when inside a bucket or folder */}
           {bucket || prefix ? (
             <XStack items="center" gap="$2" pb="$2" borderBottomWidth={1} borderColor="$borderColor">

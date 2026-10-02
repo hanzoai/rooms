@@ -110,7 +110,7 @@ export function Talk({ room }: { room: TeamRoom }) {
         </Box>
       </ChannelHeader>
 
-      <YStack flex={1} minH={0} overflow="scroll" p="$4" gap="$3">
+      <YStack flex={1} minH={0} overflowY="auto" overflowX="hidden" p="$4" gap="$3">
         {/* THREE STATES, AND SILENCE IS NOT ONE. A room that has not answered,
             a room that answered with nothing, and a room that refused all read
             differently — a pane that drew an empty list for all three would

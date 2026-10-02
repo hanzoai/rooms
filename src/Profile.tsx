@@ -88,7 +88,7 @@ export function Profile({ open, onClose }: { open: boolean; onClose: () => void 
         </Box>
       </XStack>
 
-      <YStack flex={1} minH={0} overflow="scroll" px="$4" pb="$5" gap="$4">
+      <YStack flex={1} minH={0} overflowY="auto" overflowX="hidden" px="$4" pb="$5" gap="$4">
         {/* THE PICTURE IS THE CONTROL. A square that says "change me" on hover
             is one target instead of an image beside a button, and it is where a
             reader's cursor already is. */}

@@ -327,7 +327,7 @@ function BelugaStudioInner() {
             </Text>
           </XStack>
 
-          <YStack flex={1} overflow="scroll" p="$3.5" gap="$4">
+          <YStack flex={1} overflowY="auto" overflowX="hidden" p="$3.5" gap="$4">
             <YStack gap="$1.5">
               {QUICK_PROMPTS.map((p, i) => (
                 <View
@@ -504,7 +504,7 @@ function BelugaStudioInner() {
             </View>
           </XStack>
 
-          <YStack flex={1} overflow="scroll" p="$3.5" gap="$4">
+          <YStack flex={1} overflowY="auto" overflowX="hidden" p="$3.5" gap="$4">
             <YStack gap="$2">
               <Text fontSize={10} fontWeight="700" color="var(--neutral-500)" textTransform="uppercase">
                 Active Emotion State

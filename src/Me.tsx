@@ -310,7 +310,7 @@ export function Me({
             )}
           </XStack>
         </Popover.Anchor>
-        <Popover.Content {...glass(2)} items="stretch" borderWidth={1} rounded="$6" p="$1.5" width={288} maxW="calc(100vw - 16px)" maxH="calc(100dvh - 32px)" overflow="scroll">
+        <Popover.Content {...glass(2)} items="stretch" borderWidth={1} rounded="$6" p="$1.5" width={288} maxW="calc(100vw - 16px)" maxH="calc(100dvh - 32px)" overflowY="auto" overflowX="hidden">
           <View render={<div ref={land} role="menu" aria-label="Account" onKeyDown={(e) => rove(e, close)} />} self="stretch" minW={0}>
           <YStack gap={2}>
             <SizableText size="$2" color="$soft" px="$2" py="$1.5" numberOfLines={1}>

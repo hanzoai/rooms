@@ -390,7 +390,7 @@ function Detail({
         </Box>
       </XStack>
 
-      <YStack flex={1} minH={0} overflow="scroll" p="$4" gap="$4">
+      <YStack flex={1} minH={0} overflowY="auto" overflowX="hidden" p="$4" gap="$4">
         {/* DONE, BESIDE THE NAME OF THE THING.
             Closing a card meant finding the column control and moving it, which
             is the right gesture for "where does this belong" and a long way
@@ -864,7 +864,7 @@ function Planner({ cards, onOpen }: { cards: Card[]; onOpen: (c: Card) => void }
         </Text>
       </YStack>
 
-      <YStack flex={1} minH={0} overflow="scroll">
+      <YStack flex={1} minH={0} overflowY="auto" overflowX="hidden">
         {due.length > 0 ? (
           <YStack p="$3" gap="$2">
             <Text fontSize="$1" color="$soft">
@@ -964,7 +964,7 @@ function Column({
           </Text>
         </XStack>
 
-        <YStack gap="$2" overflow="scroll" shrink={1}>
+        <YStack gap="$2" overflowY="auto" overflowX="hidden" shrink={1}>
           {cards.map((c) => (
             <Tile
               key={c.id}
@@ -1131,7 +1131,7 @@ function Filter({
       r={12}
       width={300}
       maxH={560}
-      overflow="scroll"
+      overflowY="auto" overflowX="hidden"
       p="$2"
       gap="$0.5"
       rounded="$4"
@@ -1449,7 +1449,7 @@ function Cards() {
             </XStack>
           ) : null}
 
-          <XStack flex={1} minH={0} overflow="scroll" p="$4" gap="$3" items="flex-start">
+          <XStack flex={1} minH={0} overflowX="auto" overflowY="auto" p="$4" gap="$3" items="flex-start">
             {COLUMNS.map((c) => (
               <Column
                 key={c.id}

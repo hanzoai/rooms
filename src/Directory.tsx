@@ -422,7 +422,7 @@ export function Catalog({ tab }: { tab: Tab }) {
           <Text fontSize="$3" color="$soft">
             {shown.length} {shown.length === 1 ? 'result' : 'results'}
           </Text>
-          <YStack maxH={380} overflow="scroll" pr="$1" width="100%">
+          <YStack maxH={380} overflowY="auto" overflowX="hidden" pr="$1" width="100%">
             <Grid columns={tab === 'channels' ? { min: 168, max: 4 } : { min: 240, max: 2 }} gap={12}>
               {shown.map((r) =>
                 tab === 'channels' ? (

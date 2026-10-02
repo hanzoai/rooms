@@ -407,7 +407,7 @@ function Vibe() {
             )}
           </XStack>
 
-          <YStack flex={1} overflow="scroll" p="$3.5" gap="$4">
+          <YStack flex={1} overflowY="auto" overflowX="hidden" p="$3.5" gap="$4">
             {turns.length === 0 ? (
               <Quiet>
                 Nothing has been sent from this room yet. Describe a task below and the run it
@@ -730,7 +730,7 @@ function Vibe() {
             </Text>
           </XStack>
 
-          <YStack flex={1} overflow="scroll" p="$3" gap="$3">
+          <YStack flex={1} overflowY="auto" overflowX="hidden" p="$3" gap="$3">
             <Team />
           </YStack>
         </YStack>

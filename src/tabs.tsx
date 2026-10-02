@@ -77,7 +77,7 @@ export function Tabs<Id extends string>({
       items="center"
       px="$3"
       gap="$3"
-      overflow="scroll"
+      overflowX="auto" overflowY="hidden"
       borderBottomWidth={1}
       borderColor="$borderColor"
     >

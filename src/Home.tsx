@@ -113,7 +113,7 @@ export function Home({ ask }: HomeProps) {
   }
 
   return (
-    <YStack data-home flex={1} minH={0} width="100%" overflow="scroll">
+    <YStack data-home flex={1} minH={0} width="100%" overflowY="auto" overflowX="hidden">
       <YStack
         width="100%"
         maxW={720}

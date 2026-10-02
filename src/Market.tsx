@@ -288,7 +288,7 @@ export function Market({ scope }: { scope: 'all' | 'installed' }) {
               : 'The shelf is empty — the catalog has not been synced yet.'}
         </Empty>
       ) : (
-        <YStack flex={1} minH={0} overflow="scroll" p="$5" gap="$3">
+        <YStack flex={1} minH={0} overflowY="auto" overflowX="hidden" p="$5" gap="$3">
           {/* The count is the whole match, not the page — the server says so and
               a card grid that implies otherwise reads as a complete catalogue. */}
           <Text fontSize="$1" color="$soft">
