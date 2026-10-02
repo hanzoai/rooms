@@ -896,7 +896,7 @@ export function Drive() {
           {/* If we are inside a Bucket/Folder, show its files & folders */}
           {bucket || prefix ? (
             <YStack gap="$2">
-              <YStack borderWidth={1} borderColor="$borderColor" rounded={8} overflow="hidden">
+              <YStack borderWidth={1} borderColor="$borderColor" rounded={8} overflowX="auto" overflowY="hidden">
                 {/* Table Header */}
                 <View
                   display="grid"
@@ -1016,7 +1016,7 @@ export function Drive() {
                   Storage Buckets
                 </Text>
 
-                <YStack borderWidth={1} borderColor="$borderColor" rounded={8} overflow="hidden">
+                <YStack borderWidth={1} borderColor="$borderColor" rounded={8} overflowX="auto" overflowY="hidden">
                   {failed ? (
                     <Text {...NOTE}>
                       {failed}
@@ -1071,7 +1071,7 @@ export function Drive() {
                   Projects (Unified VFS)
                 </Text>
 
-                <YStack borderWidth={1} borderColor="$borderColor" rounded={8} overflow="hidden">
+                <YStack borderWidth={1} borderColor="$borderColor" rounded={8} overflowX="auto" overflowY="hidden">
                   {/* Table Header */}
                   <View
                     display="grid"
