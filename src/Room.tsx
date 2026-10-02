@@ -24,7 +24,16 @@ import { useHost } from './lib/hostname'
 import { link } from './lib/tags'
 import { useRooms } from './host'
 
-export function Room({ mode, children }: { mode: Mode; children: ReactNode }) {
+export function Room({
+  mode,
+  front = false,
+  children,
+}: {
+  mode: Mode
+  /** Home at `/` on a workspace rooted there: a stranger meets the host's Landing (`Orgs`). */
+  front?: boolean
+  children: ReactNode
+}) {
   const { router } = useRooms()
   // A sign-in leaves for the issuer and returns to a FIXED callback that knows
   // nothing of the room the reader was in. So the room is written down here,
@@ -51,7 +60,7 @@ export function Room({ mode, children }: { mode: Mode; children: ReactNode }) {
   // organization that is paid for, and has picked the one they are working in.
   // Going to a room from the apex is going to hanzo.team, in this tab.
   return (
-    <Orgs>
+    <Orgs front={front}>
       <Workspace
         mode={mode}
         navigate={(route) => {

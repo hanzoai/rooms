@@ -32,7 +32,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { subscriptionPlans } from "@hanzo/plans";
-import { where } from "../host";
+import { where } from "../where";
 import { api } from "./api";
 import { org } from "./session";
 
@@ -150,6 +150,14 @@ export function term(href: string, interval: Interval): string {
   const url = new URL(href, BILLING_URL);
   url.searchParams.set("interval", "year");
   return url.toString();
+}
+
+/**
+ * The cart for `seats` of a per-seat plan, for a term, charged to `org` and
+ * returning to `back` once paid. `quantity` is the seat count checkout sells.
+ */
+export function cartUrl(plan: string, seats: number, interval: Interval, org: string, back: string): string {
+  return term(payUrl("/cart", { plan, quantity: String(seats), org, returnUrl: back }), interval);
 }
 
 /**
