@@ -83,9 +83,11 @@ export function useOrg(): { id?: string; name?: string } {
 export function useLook() {
   const { accessToken } = useIam()
   const org = useOrg()
+  // Signed out there is no person to ask about, so IAM is not asked: a stranger
+  // passing through a room on the way to sign in sends nothing to the issuer.
   return useAppearance({
     org: org.id,
-    account: { base: (where().iam ?? 'https://hanzo.id').replace(/\/+$/, ''), token: accessToken ?? undefined },
+    account: accessToken ? { base: (where().iam ?? 'https://hanzo.id').replace(/\/+$/, ''), token: accessToken } : undefined,
   })
 }
 
