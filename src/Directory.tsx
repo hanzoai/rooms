@@ -129,15 +129,21 @@ interface Row {
  */
 const LEAD = ['tiktok', 'instagram', 'linkedin', 'slack', 'x', 'whatsapp', 'discord', 'telegram', 'facebook', 'teams', 'threads', 'youtube']
 
-/** The host's published integrations, as directory rows. Real, public, counted. */
-const apps = (): Row[] => (where().integrations ?? []).map((i) => ({
-  id: i.slug,
-  name: i.name,
-  publisher: i.creator,
-  // The catalog's own sentence, trimmed to the card's two lines.
-  description: i.description.split('. ')[0] + '.',
-  kind: 'native',
-}))
+/** The host's published integrations, as directory rows. Real, public, counted. Read once. */
+let listing: Promise<Row[]> | null = null
+const apps = (): Promise<Row[]> =>
+  (listing ??= (where().integrations?.() ?? Promise.resolve([]))
+    .then((all) =>
+      all.map((i): Row => ({
+        id: i.slug,
+        name: i.name,
+        publisher: i.creator,
+        // The catalog's own sentence, trimmed to the card's two lines.
+        description: i.description.split('. ')[0] + '.',
+        kind: 'native',
+      })),
+    )
+    .catch(() => []))
 
 const CHANNELS_CATALOG: Row[] = [
   { id: 'slack', name: 'Slack', publisher: 'Hanzo Auto', description: 'Bidirectional sync with FoundationDAO & workspace Slack channels and threads.', kind: 'native', available: true, connected: true },
@@ -179,7 +185,7 @@ const SKILLS_CATALOG: Row[] = [
 function catalogFor(tab: Tab): Row[] {
   switch (tab) {
     case 'apps':
-      return apps()
+      return []
     case 'channels':
       return CHANNELS_CATALOG
     case 'plugins':
@@ -335,13 +341,18 @@ export function Catalog({ tab }: { tab: Tab }) {
     // also mark which providers the org has actually connected, from the one
     // read that names them.
     if (tab === 'apps') {
+      apps().then((list) => {
+        if (live) setRows(list)
+      })
       if (auth) {
-        fetch(`${api()}/v1/integrations/connectors`, { headers: auth })
-          .then((r) => (r.ok ? r.json() : null))
-          .then((j) => {
+        Promise.all([
+          apps(),
+          fetch(`${api()}/v1/integrations/connectors`, { headers: auth }).then((r) => (r.ok ? r.json() : null)),
+        ])
+          .then(([list, j]) => {
             if (!live || !j?.connectors) return
             const on = new Set((j.connectors as Record<string, unknown>[]).map((c) => String(c.provider)))
-            setRows(apps().map((a) => (on.has(a.id) ? { ...a, connected: true } : a)))
+            setRows(list.map((a) => (on.has(a.id) ? { ...a, connected: true } : a)))
           })
           .catch(() => {})
       }

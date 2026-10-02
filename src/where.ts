@@ -30,8 +30,12 @@ export interface Addresses {
   key?: string
   /** The plan catalogue as the host's build last read it: the first paint. */
   plans?: BillingPlan[]
-  /** The SDKs and frameworks Directory lists, which the host publishes. */
-  integrations?: Integration[]
+  /**
+   * The SDKs and frameworks Directory lists, which the host publishes. A loader,
+   * so the catalogue — every guide's code, and the model counts it quotes — is
+   * fetched when Directory's Apps tab opens, not on every page the rooms frame.
+   */
+  integrations?: () => Promise<Integration[]>
   /**
    * The host's front door, for a workspace rooted at `/` (hanzo.team): what a
    * stranger at Home is shown instead of the sign-in, and the business sign-up
@@ -46,8 +50,7 @@ let addresses: Addresses = { site: '', home: '/home', signUp: '/signup' }
 /**
  * State the host's addresses, at module scope, before anything renders. Each
  * call adds to what is stated, so a host can name its cheap addresses at its
- * root and the heavy ones (the plan catalogue, the integrations) only where the
- * rooms are drawn.
+ * root and the heavier ones only where the rooms are drawn.
  */
 export function configure(given: Partial<Addresses>): void {
   addresses = { ...addresses, ...given }
