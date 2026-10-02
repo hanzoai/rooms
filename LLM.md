@@ -65,6 +65,20 @@ configure({ integrations: () => import('@/lib/integrations').then((m) => m.INTEG
   imports gui primitives from `./ui`, never `@hanzo/ui`: the root barrel would
   register its whole client surface on the route (81 KB on a model page).
 
+## Rules the rooms keep
+
+- A scroller says `overflowY="auto" overflowX="hidden"` (or the reverse for a
+  strip that scrolls sideways), never `overflow="scroll"`: a classic scrollbar
+  draws its track and steppers whether or not anything overflows. The bars
+  themselves are @hanzo/design's (base.css ≥ 0.5.34).
+- A pane is cut by `pane()` (ground.ts) on design's first paper rung,
+  `--shadow-sheet-1`, over the floor's `--glass`: the second rung's drop and
+  `--glass-strong` read as a gradient through a translucent pane.
+- Files go with a chat message by the paperclip or a drop on the room
+  (`lib/attach`): an image as an `image_url` part through @hanzo/ai's
+  `send(text, images)` (≥ 0.6.20), a text file fenced under its name, any other
+  kind refused by name.
+
 ## Layout
 
 - `src/*.tsx` — the rooms, as `components/workspace/*` was in hanzo.ai; each is

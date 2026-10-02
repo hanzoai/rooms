@@ -1,6 +1,6 @@
 {
   "name": "@hanzo/rooms",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "The workspace rooms \u2014 Home, Chat, Inbox, Contacts, Meet, Cal, Drive, Board, Work, Bots \u2014 and the frame that holds them, once, for every Hanzo surface.",
   "type": "module",
   "main": "./dist/index.js",
