@@ -47,7 +47,7 @@ import { countSignup } from './lib/intent'
 import { track } from './lib/tags'
 import { BAD, mix } from './lib/mix'
 import { useRooms } from './host'
-import { site, where } from './where'
+import { brand, site, where } from './where'
 
 /** A template to set up once the organization is live. */
 const SETUP = 'hanzo:org:template'
@@ -350,7 +350,7 @@ function Step({ at, of }: { at: number; of: number }) {
 function Brand() {
   return (
     <Text fontSize="$6" fontWeight="500" mb={28} color="var(--foreground)">
-      {where().brand ?? 'Hanzo'}
+      {brand()}
     </Text>
   )
 }

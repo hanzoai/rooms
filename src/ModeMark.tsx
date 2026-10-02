@@ -8,9 +8,10 @@
 import type { ReactNode } from 'react'
 import { MessageSquare, Code2 } from 'lucide-react'
 import { XStack, YStack, Text, Tooltip, TooltipContent, TooltipTrigger } from '@hanzo/ui'
+import { brand } from './where'
 
-/** The product's name in each mode: Hanzo AI in Chat, Hanzo Dev in Dev. */
-export const wordmark = (mode: 'chat' | 'dev'): string => (mode === 'dev' ? 'Hanzo Dev' : 'Hanzo AI')
+/** The product's name in each mode: the host's brand in Chat (Hanzo AI, Hanzo Team), Hanzo Dev in Dev. */
+export const wordmark = (mode: 'chat' | 'dev'): string => (mode === 'dev' ? 'Hanzo Dev' : brand())
 
 /** One side of the switch: an icon button named for its mode, with the name as its tooltip. */
 function Side({ name, on, onPress, children }: { name: string; on: boolean; onPress: () => void; children: ReactNode }) {

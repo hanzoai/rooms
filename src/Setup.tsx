@@ -16,7 +16,7 @@ import { firstRun } from '@hanzo/ui/onboarding'
 import { useKept } from './kept'
 import { orgs } from './lib/session'
 import { api } from './lib/api'
-import { site } from './where'
+import { brand, site } from './where'
 
 /** Put away in this browser. */
 const LATER = 'hanzo.onboarding.later'
@@ -34,11 +34,11 @@ export function Setup() {
   }, [later])
   if (later || !owed) return null
   return (
-    <XStack data-slot="setup" role="region" aria-label="Set up Hanzo" items="center" gap="$2.5" px="$3" py="$2.5" rounded="$4" borderWidth={1} borderColor="$borderColor" bg="$edge">
+    <XStack data-slot="setup" role="region" aria-label={`Set up ${brand()}`} items="center" gap="$2.5" px="$3" py="$2.5" rounded="$4" borderWidth={1} borderColor="$borderColor" bg="$edge">
       <Sparkles size={16} aria-hidden />
       <YStack flex={1} minW={0} gap="$0.5">
         <SizableText size="$2" color="$ink" numberOfLines={1}>
-          Finish setting up Hanzo
+          Finish setting up {brand()}
         </SizableText>
         <Text
           render={<a href={site(`/onboarding?next=${encodeURIComponent('/')}`)} />}

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { configure, site, where } from './where'
+import { brand, configure, site, where } from './where'
 import { safe, signUp } from './lib/destination'
 
 describe('addresses', () => {
@@ -10,6 +10,15 @@ describe('addresses', () => {
     expect(signUp()).toBe('/start')
     configure({ api: 'https://api.hanzo.ai' })
     expect(where()).toMatchObject({ site: 'https://hanzo.ai', home: '/', api: 'https://api.hanzo.ai' })
+  })
+})
+
+describe('brand', () => {
+  test("the rooms print the host's product name, hanzo.ai's until a host states its own", () => {
+    configure({ brand: undefined })
+    expect(brand()).toBe('Hanzo AI')
+    configure({ brand: 'Hanzo Team' })
+    expect(brand()).toBe('Hanzo Team')
   })
 })
 

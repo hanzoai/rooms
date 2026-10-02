@@ -26,7 +26,12 @@ export interface Addresses {
   home: string
   /** Where a new account starts: `/signup`, or hanzo.team's `/start`. */
   signUp: string
-  /** The product's name where the rooms print it: Home's title, the setup's wordmark. Default `Hanzo`. */
+  /**
+   * The product's name, wherever the rooms print it: the sidebar's wordmark,
+   * Home's and Chat's titles, the composer's placeholder, the setup. The host's
+   * brand by hostname (`@hanzogui/shell/registry`'s `brandName`): `Hanzo Team`
+   * on hanzo.team. Default `Hanzo AI`, hanzo.ai's.
+   */
   brand?: string
   /** The publishable key anonymous calls carry. */
   key?: string
@@ -72,6 +77,9 @@ export function configure(given: Partial<Addresses>): void {
 
 /** The host's addresses, for code that runs outside a component. */
 export const where = (): Addresses => addresses
+
+/** The product's name, as the host states it. Read at call time, like every address. */
+export const brand = (): string => addresses.brand ?? 'Hanzo AI'
 
 /** A page of the app's own, from wherever the rooms are mounted. */
 export const site = (path: string): string => `${addresses.site}${path}`

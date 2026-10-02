@@ -24,6 +24,7 @@ import { Box, Text, XStack, YStack } from '@hanzo/ui'
 import { useIam } from '@hanzo/iam/react'
 import { hasSession } from './lib/session'
 import { useAi } from './lib/ai'
+import { brand } from './where'
 
 /** A listing reachable over HTTP is one this app can connect on its own. */
 const reachable = (listing: McpListing): boolean =>
@@ -247,10 +248,10 @@ export function Market({ scope }: { scope: 'all' | 'installed' }) {
     <YStack flex={1} minH={0}>
       <YStack p="$5" gap="$2" borderBottomWidth={1} borderColor="$borderColor">
         <Text fontSize="$7" lineHeight="$7" fontWeight="500" color="$ink">
-          Put AI to work in Hanzo
+          Put AI to work in {brand()}
         </Text>
         <Text fontSize="$3" color="$soft">
-          Browse agents that bring your tools into Hanzo.
+          Browse agents that bring your tools into {brand()}.
         </Text>
 
         <XStack

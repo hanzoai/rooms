@@ -200,7 +200,7 @@ import {
 } from "./contacts-store";
 import { bare } from './lib/bare'
 import { BAD } from './lib/mix'
-import { site, where } from './where'
+import { brand, site, where } from './where'
 
 export type Mode =
   | "home"
@@ -247,7 +247,7 @@ const HOME: Place = {
     return where().home;
   },
   get title() {
-    return where().brand ?? "Hanzo";
+    return brand();
   },
   label: "Home",
   // The chat bubble. Home IS the conversation with the org — the rooms it talks
@@ -272,7 +272,9 @@ const HOME: Place = {
 const CHAT: Place = {
   id: "chat",
   route: "/chat",
-  title: "Hanzo AI",
+  get title() {
+    return brand();
+  },
   label: "Chat",
   icon: MessageSquare,
   create: "New chat",
@@ -2195,7 +2197,7 @@ function Frame({
                 e.preventDefault();
                 navigate("/");
               }}
-              aria-label="Hanzo home"
+              aria-label={`${brand()} home`}
               title="Home"
             />
           }

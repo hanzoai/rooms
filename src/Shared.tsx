@@ -17,6 +17,7 @@
 import { useEffect, useState } from 'react'
 import { useIam } from '@hanzo/iam/react'
 import { Anchor, Button, Text, XStack, YStack } from '@hanzo/ui'
+import { brand } from './where'
 import { useHydrated } from './lib/hydrated'
 import { enter, LOGIN, signUp } from './lib/destination'
 import { Prose } from './Prose'
@@ -94,9 +95,9 @@ export function Shared() {
   return (
     <YStack role="main" height="100dvh" overflowY="auto" bg="$background">
       <XStack height={48} px="$4" items="center" justify="space-between" borderBottomWidth={1} borderColor="$borderColor" shrink={0}>
-        <Anchor href="/" aria-label="Hanzo">
+        <Anchor href="/" aria-label={brand()}>
           <Text fontSize="$4" fontWeight="600" color="$ink">
-            Hanzo
+            {brand()}
           </Text>
         </Anchor>
         {shown.kind === 'read' && shown.shared.full ? (
@@ -131,7 +132,7 @@ function Body({ state, signedIn, onOpen }: { state: State; signedIn: boolean; on
         </Text>
         <Anchor href="/">
           <Button size="sm" variant="outline">
-            Go to Hanzo
+            Go to {brand()}
           </Button>
         </Anchor>
       </YStack>

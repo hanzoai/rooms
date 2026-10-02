@@ -78,7 +78,7 @@ import { Upgrade, useFree, type Ask } from './Upgrade';
 import { enter, LOGIN } from './lib/destination';
 import { first } from './lib/first';
 import { BAD, mix } from "./lib/mix";
-import { site } from './where'
+import { brand, site } from './where'
 
 /** The veil under the free lane's consent sheet. */
 const SCRIM = mix("var(--pure-black)", 72, "srgb");
@@ -277,12 +277,12 @@ export function Ask({
  *
  * The package defaults to "Ask anything" and argues for it against
  * "Message <model>" — a name that moves renames the control every time the
- * model does. This is not that: it is the PRODUCT's name, one constant string,
- * and it is already how this file addresses a character (`Message
- * ${persona.name}`). `label` stays "Ask anything", so the accessible name does
- * not move when the placeholder does.
+ * model does. This is not that: it is the PRODUCT's name — the host's brand,
+ * Hanzo AI or Hanzo Team — and it is already how this file addresses a
+ * character (`Message ${persona.name}`). `label` stays "Ask anything", so the
+ * accessible name does not move when the placeholder does.
  */
-const MESSAGE = "Message Hanzo AI";
+const message = (): string => `Message ${brand()}`;
 
 /** The id the room's system turn is held under in the thread. */
 const ROOM = "room";
@@ -381,7 +381,7 @@ const STALL = 300_000;
  * models on the menu, not the room.
  */
 function Thread({
-  placeholder = MESSAGE,
+  placeholder = message(),
   initial,
   anonymous = false,
   heading,

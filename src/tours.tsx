@@ -6,6 +6,8 @@
 // role, its text — never a marker sprinkled for the tour. A stop whose anchor is
 // absent is skipped, so each tour describes the room as it is that day.
 
+import { brand } from './where'
+
 /** One stop: what to point at, and what to say about it. */
 export interface Stop {
   id: string
@@ -88,7 +90,9 @@ const rail = (label: string): Element | null => {
 const CHAT: Stop[] = [
   {
     id: 'composer',
-    title: 'What are you interested in? How can Hanzo help you?',
+    get title() {
+      return `What are you interested in? How can ${brand()} help you?`
+    },
     body: 'Type what you want in plain words. Paste an error, describe a feature, or drop in a file.',
     side: 'top',
     find: composer,

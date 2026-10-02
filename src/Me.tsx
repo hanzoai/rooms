@@ -33,6 +33,7 @@ import { org as current, orgs, pick, renew, scope, superAdmin } from './lib/sess
 import { payPage } from './lib/pay'
 import { planName } from './lib/plans'
 import { ENTRY } from './lib/host'
+import { where } from './where'
 import { SupportPicker } from './Support'
 import { BAD } from './lib/mix'
 
@@ -246,7 +247,7 @@ export function Me({
   const other = usePlan(personal && personal.name !== current ? personal.name : null, menu.open)
   const planFor = (o: Org) => (o.name === current ? planOf(tier) : o.personal ? other : '')
   const who = host.person?.name || host.person?.email || ''
-  const where = [said(here?.role ?? ''), here?.display ?? current].filter(Boolean).join(' · ')
+  const standing = [said(here?.role ?? ''), here?.display ?? current].filter(Boolean).join(' · ')
 
   // The organization in use takes focus once the menu is drawn — after the
   // popover has placed its own focus — so the keys reach the rows at once.
@@ -300,9 +301,9 @@ export function Me({
                   <SizableText size="$3" fontWeight="600" color="$ink" numberOfLines={1} text="left">
                     {who}
                   </SizableText>
-                  {where ? (
+                  {standing ? (
                     <SizableText size="$1" color="$soft" numberOfLines={1} text="left">
-                      {where}
+                      {standing}
                     </SizableText>
                   ) : null}
                 </YStack>
@@ -336,7 +337,8 @@ export function Me({
             </YStack>
             <Item icon={<Plus size={15} aria-hidden />} label="Create organization" onPress={() => (menu.onOpenChange(false), setCreating(true))} />
             <Item icon={<Settings size={15} aria-hidden />} label="Organization settings" onPress={() => (menu.onOpenChange(false), window.location.assign(ORG_SETTINGS))} />
-            {here && !here.personal ? (
+            {/* On hanzo.team the reader is already in the team, and a team is founded through its setup. */}
+            {where().team ? null : here && !here.personal ? (
               <Item
                 icon={<Users size={15} aria-hidden />}
                 label="Open in Hanzo Team"

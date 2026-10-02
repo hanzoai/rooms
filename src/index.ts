@@ -8,7 +8,7 @@
  * The root names what a host passes; each room is its own subpath, so a page
  * loads the rooms it draws and no others.
  */
-export { configure, where, site } from './where'
+export { configure, where, site, brand } from './where'
 export type { Addresses } from './where'
 export { Rooms, Look, useRooms, useLook, useOrg } from './host'
 export type { Router, Link, RoomsProps } from './host'

@@ -30,6 +30,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { createPortal } from 'react-dom'
 import { Text, View, XStack, YStack, type GuiElement } from '@hanzo/gui'
 import { Button } from '@hanzo/ui'
+import { brand } from './where'
 import { useIam } from '@hanzo/iam/react'
 import { useAi } from './lib/ai'
 import { Next, Scene } from './Scene'
@@ -249,7 +250,7 @@ export function Guide({ room = 'chat' }: { room?: Tour }) {
   const panel = { position: 'fixed', bg: 'var(--surface-scrim)', z: 'var(--z-overlay)', onClick: () => done('skipped') } as const
 
   return createPortal(
-    <div role="dialog" aria-modal="true" aria-label="Getting started with Hanzo">
+    <div role="dialog" aria-modal="true" aria-label={`Getting started with ${brand()}`}>
       <View {...panel} t={0} l={0} r={0} height={Math.max(0, spot.top)} />
       <View {...panel} t={spot.top + spot.height} l={0} r={0} b={0} />
       <View {...panel} t={spot.top} l={0} width={Math.max(0, spot.left)} height={spot.height} />

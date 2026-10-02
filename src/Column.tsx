@@ -27,6 +27,7 @@ import { useSpan } from './span'
 import { pane } from './ground'
 import { pick } from './lib/session'
 import { app, talk } from './lib/host'
+import { brand } from './where'
 
 /** The grip stands in the gutter between the column and the pane. gui carries a `calc()` to the page unchanged; its
  *  types only name custom properties. */
@@ -107,7 +108,7 @@ export function Column({
           data-slot="app-rail"
           data-collapsed="true"
           role="navigation"
-          aria-label="Hanzo"
+          aria-label={brand()}
           {...pane()}
           {...FILL}
           px="$1.5"
@@ -144,7 +145,7 @@ export function Column({
         data-slot="app-rail"
         data-collapsed="false"
         role="navigation"
-        aria-label="Hanzo"
+        aria-label={brand()}
         {...pane()}
         {...FILL}
         px="$2.5"
