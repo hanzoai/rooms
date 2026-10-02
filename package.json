@@ -42,7 +42,7 @@
     "gen": "node scripts/team.mjs",
     "build": "rm -rf dist && node scripts/team.mjs && tsc -p tsconfig.build.json && node scripts/specifiers.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run",
     "prepack": "pnpm run build",
     "lint:design": "hanzo-design-lint src"
   },
