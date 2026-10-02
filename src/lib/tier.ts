@@ -27,7 +27,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api } from './api'
 import { bearer, org, orgs, scope } from './session'
 import { list } from './list'
-import { money } from './plans'
+import { money } from './pay'
 import { date } from './limits'
 
 /** The plan, as billing names it. */

@@ -151,7 +151,7 @@ import { Account } from "./Account";
 import { ModeMark } from "./ModeMark";
 import { called } from "./team";
 import type { OrgCommandItem } from "@hanzogui/shell";
-import { checkoutUrl } from './lib/plans';
+import { checkoutUrl } from './lib/pay';
 
 /** Tabs: the terminals, at their own host. */
 const TABS = "https://tabs.hanzo.ai/app";

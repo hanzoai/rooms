@@ -32,7 +32,7 @@ import { Box, Button, Text, View, XStack, YStack } from '@hanzo/ui'
 import { useIam, useOrganizations } from '@hanzo/iam/react'
 import { useAi } from './lib/ai'
 import { useOpen } from './open'
-import { checkoutUrl } from './lib/plans'
+import { checkoutUrl } from './lib/pay'
 import { BAD, mix } from './lib/mix'
 
 interface Bucket {

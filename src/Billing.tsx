@@ -16,7 +16,8 @@ import { Box, Text, XStack } from '@hanzo/ui'
 import { useIam } from '@hanzo/iam/react'
 import { formatCents } from '@hanzo/usage'
 import { renewal, useSubscription, useTier } from './lib/tier'
-import { payPage, planName } from './lib/plans'
+import { payPage } from './lib/pay'
+import { planName } from './lib/plans'
 
 export function Billing() {
   const { isAuthenticated } = useIam()
