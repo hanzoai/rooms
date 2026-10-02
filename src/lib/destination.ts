@@ -264,7 +264,7 @@ export function safe(stored: string | null | undefined, fallback = DEFAULT_DESTI
   // inside the marketing layout, so it wears the header and its Sign in can be
   // clicked — from the one address whose second visit is guaranteed to fail.
   const path = parsed.pathname.replace(/\/+$/, "") || "/";
-  if (RESTARTS_THE_FLOW.has(path) || path === signUp()) return fallback;
+  if (RESTARTS_THE_FLOW.has(path)) return fallback;
   return stored;
 }
 
