@@ -130,6 +130,14 @@ export const left = (s: Span): number => 100 - s.percent
 /** Whether a model is a Hanzo SKU — an Enso or Zen id — the only models a consumer surface offers. */
 export const sku = (id: string): boolean => /^(hanzo\/)?(enso|zen)/i.test(id)
 
+/**
+ * Whether a model can answer a chat turn: it names no outputs, or names text
+ * among them. `zen-scribe` (a transcript) and `zen-voice-mini` (audio) are
+ * Zen ids the catalog lists, and neither answers a question.
+ */
+export const chats = (model: { id: string; outputs?: unknown }): boolean =>
+  !Array.isArray(model.outputs) || model.outputs.includes('text')
+
 /** A reset as a clock reads it in this browser — "17:00" — or '' for none. */
 export function clock(iso: string | null | undefined): string {
   const t = iso ? Date.parse(iso) : NaN

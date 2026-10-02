@@ -47,14 +47,14 @@ import {
 import { ASK, Chat as ChatSurface, Code, Failure, Parts, words, type Said } from "@hanzo/ui/chat";
 import { compose, hold, images, partsOf, type Held } from "./lib/attach";
 import { Face, brief as roomBrief, join, roleOf, roomTurn, roster as rosterLine, rosterOf, speakers, speaksOf, voiceOf } from "./cast";
-import { SpeakButton, speakAgent } from "./speech";
+import { SpeakButton, cleanForSpeech } from "./speech";
 import { Crew, HOUSE, useCrew } from "./crew";
 import { called } from "./team";
 import { Anchor, Box, Button, Text, View, XStack, YStack } from "@hanzo/ui";
 import { Control } from "@hanzo/composer";
 import { useIam, useIamToken } from "@hanzo/iam/react";
 import { hasSession, org } from "./lib/session";
-import { clock, sku, useLimits } from "./lib/limits";
+import { chats, clock, sku, useLimits } from "./lib/limits";
 import { Meters } from "./meters";
 import { useHydrated } from "./lib/hydrated";
 import { base, served } from "./lib/ai";
@@ -528,7 +528,11 @@ function Thread({
   // bare "not found", after it has already recorded the question. `served`
   // keeps the house name where it is served and otherwise falls to the first
   // model that is, so a room on any catalogue can be spoken to.
-  const { models } = useModels();
+  // A SPEECH MODEL NEVER ANSWERS A CHAT TURN. The catalog lists the
+  // transcriber and the voice beside the chat models; one that names its
+  // outputs and names no text (`chats`) is neither offered nor fallen back to.
+  const { models: catalog } = useModels();
+  const models = useMemo(() => catalog.filter(chats), [catalog]);
   // HANZO MODELS ALONE are offered here, to everyone: an Enso or Zen id
   // (`sku`). A preference kept from before for any other model is not one this
   // room offers, so the house router is asked for instead, and `served` keeps
@@ -716,47 +720,40 @@ function Thread({
   }, []);
   useSeed(initial, setDraft);
 
-  // DICTATION, the same one the site's own composer offers. `speech()` defaults
-  // to the Hanzo gateway and `base()` is the one place a host is read from, so
+  // DICTATION through Hanzo's own ear: the mic records and each pause is
+  // posted to /v1/audio/transcriptions (`zen-scribe`). `speech()` defaults to
+  // the Hanzo gateway and `base()` is the one place a host is read from, so
   // pointing a local cloud at one points both. The token is the reader's own —
-  // the package never invents a credential — and where a browser has no
-  // recogniser `<Voice/>` wears the reason rather than failing silently.
+  // the package never invents a credential — and a refusal is worn by
+  // `<Voice/>`, never passed off as a transcript.
   const { token } = useIamToken();
-
-  const agentVoice = voiceOf(withWhom);
-  const ear = useMemo(
-    () =>
-      speech({
-        ...base(),
-        ...(token ? { token } : {}),
-        voice: { name: agentVoice },
-      }),
-    [token, agentVoice],
-  );
+  const ear = useMemo(() => speech({ ...base(), ...(token ? { token } : {}) }), [token]);
   const voice = useVoice({
     speech: ear,
     onPartial: setDraft,
     onUtterance: setDraft,
   });
 
-  // When voice dictation is open, automatically speak incoming assistant replies
+  // WHILE THE MIC IS OPEN, A FINISHED REPLY IS READ ALOUD by the platform's
+  // voice, through the conversation's own mouth so speaking over it stops it.
+  // A room's reply is read part by part, each in its speaker's cast voice.
   const wasStreaming = useRef(false);
   useEffect(() => {
     if (wasStreaming.current && !chat.streaming && voice.open) {
       const msgs = chat.messages;
       const lastMsg = msgs[msgs.length - 1];
       if (lastMsg && lastMsg.role === "assistant" && typeof lastMsg.content === "string") {
-        // A room's reply is read part by part, each in its speaker's voice.
         const parts = room.length > 1 ? speakers(lastMsg.content, room) : [{ who: withWhom, text: lastMsg.content }];
-        const read = (i: number) => {
-          if (i >= parts.length) return;
-          speakAgent(parts[i].text, { agent: parts[i].who ?? withWhom ?? undefined, onEnd: () => read(i + 1) });
-        };
-        read(0);
+        void (async () => {
+          for (const part of parts) {
+            const said = cleanForSpeech(part.text);
+            if (said) await voice.say(said, voiceOf(part.who ?? withWhom ?? undefined));
+          }
+        })();
       }
     }
     wasStreaming.current = chat.streaming;
-  }, [chat.streaming, voice.open, chat.messages, withWhom, room]);
+  }, [chat.streaming, voice.open, voice.say, chat.messages, withWhom, room]);
 
   // A SEND THAT WAITS ONE RENDER. `send` closes over the turns it was rendered
   // with, so a send that first tidies the thread is held here and made from the
