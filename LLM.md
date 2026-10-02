@@ -86,7 +86,7 @@ configure({ integrations: () => import('@/lib/integrations').then((m) => m.INTEG
 - `src/bots/*` — the Bots room.
 - `src/lib/*` — the workspace's infrastructure, one copy for every host:
   `session`, `destination`, `api`, `ai` (useAi), `account`, `tier`, `limits`,
-  `plans`, `share`, `coding`, `todo`, `durable`, `tags`, `host` (estate routing),
+  `plans`, `pay` (the pay site and money, apart from the plan catalogue), `share`, `coding`, `todo`, `durable`, `tags`, `host` (estate routing),
   `mix`, `hydrated` … Apps import these from the package
   (`@hanzo/rooms/lib/session`) and keep no copy.
 - `src/team.gen.ts` — the core team's persona files as strings, generated from
