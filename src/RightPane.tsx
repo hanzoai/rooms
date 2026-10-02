@@ -14,10 +14,12 @@
 // OUTPUTS AND SOURCES ARE DERIVED FROM THE TURNS, never from a second list kept
 // in step with them. `LLM.md` already states this rule for `Work` and it is the
 // same rule: the conversation is the record, so a fenced block in an answer IS
-// an output and an image in a question IS a source. There is nothing to sync,
-// nothing to invalidate, and no count that can disagree with the transcript —
-// and switching channels costs no request, because the turns are already in
-// hand. A conversation that has produced nothing says so.
+// an output, and an image in a question or a block in it that names a file IS a
+// source. There is nothing to sync, nothing to invalidate, and no count that
+// can disagree with the transcript — and switching channels costs no request,
+// because the turns are already in hand. The one thing listed that is not yet
+// a turn is what is held for the next message (`hold` in `pane.ts`), which a
+// send spends into one. A conversation that has produced nothing says so.
 //
 // THE COLUMN IS STACKED, NOT SPLIT. The reference this follows puts a ~300px
 // summary beside a wide browser, which needs about 900px of column; the frame
@@ -60,12 +62,12 @@ import { useOpen } from './open'
 import {
   address,
   channel,
-  hold,
   name as titleOf,
   openTab,
   pickTab,
   pin,
   shutTab,
+  take,
   usePane,
   type Held,
   type Leaf,
@@ -176,7 +178,11 @@ function outputs(said: ChatMessage[]): Mark[] {
   return out
 }
 
-/** What went into this conversation: pictures asked about, and files brought in. */
+/**
+ * What went into this conversation: pictures asked about, files sent fenced
+ * under their names (`compose` in `lib/attach`), and files held for the next
+ * message.
+ */
 function sources(said: ChatMessage[], held: Held[]): Mark[] {
   const out: Mark[] = []
   said.forEach((m, turn) => {
@@ -184,15 +190,16 @@ function sources(said: ChatMessage[], held: Held[]): Mark[] {
     pictures(m).forEach((href, i) => {
       out.push({ id: `s${turn}.${i}`, name: 'Attached image', kind: 'image', href })
     })
+    let n = 0
+    for (const [, info, body] of words(m).matchAll(FENCE)) {
+      n += 1
+      const named = info.trim()
+      if (!suffix(named)) continue
+      out.push({ id: `sf${turn}.${n}`, name: named, kind: 'file', body, mime: MIME[suffix(named)] ?? 'text/plain' })
+    }
   })
   for (const h of held) {
-    out.push({
-      id: h.id,
-      name: h.name,
-      kind: h.type.startsWith('image/') ? 'image' : 'file',
-      href: h.href,
-      mime: h.type,
-    })
+    out.push({ id: h.id, name: h.name, kind: h.kind === 'image' ? 'image' : 'file', href: h.href, mime: h.type })
   }
   return out
 }
@@ -400,23 +407,6 @@ function Add({ at }: { at: string }) {
       </DropdownMenuContent>
     </DropdownMenu>
   )
-}
-
-/**
- * Asks for files and takes what is given.
- *
- * The picker is the browser's, minted and dropped per press rather than kept as
- * a hidden input in the markup: a menu row is not a form control, and an
- * `<input type=file>` parked in the tree is one more thing for a screen reader
- * to walk past.
- */
-function take(at: string): void {
-  if (typeof document === 'undefined') return
-  const ask = document.createElement('input')
-  ask.type = 'file'
-  ask.multiple = true
-  ask.onchange = () => hold(at, Array.from(ask.files ?? []))
-  ask.click()
 }
 
 /**

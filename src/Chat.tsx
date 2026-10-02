@@ -45,12 +45,13 @@ import {
   isFree,
 } from "@hanzo/ai";
 import { ASK, Chat as ChatSurface, Code, Failure, Parts, words, type Said } from "@hanzo/ui/chat";
-import { compose, hold, images, partsOf, type Held } from "./lib/attach";
+import { compose, images, partsOf } from "./lib/attach";
+import { channel, drop, hold, spend, take, usePane } from "./pane";
 import { Face, brief as roomBrief, join, roleOf, roomTurn, roster as rosterLine, rosterOf, speakers, speaksOf, voiceOf } from "./cast";
 import { SpeakButton, cleanForSpeech } from "./speech";
 import { Crew, HOUSE, useCrew } from "./crew";
 import { called } from "./team";
-import { Anchor, Box, Button, Text, View, XStack, YStack } from "@hanzo/ui";
+import { Anchor, Box, Button, Text, Tooltip, TooltipContent, TooltipTrigger, View, XStack, YStack } from "@hanzo/ui";
 import { Control } from "@hanzo/composer";
 import { useIam, useIamToken } from "@hanzo/iam/react";
 import { hasSession, org } from "./lib/session";
@@ -60,7 +61,7 @@ import { useHydrated } from "./lib/hydrated";
 import { base, served } from "./lib/ai";
 import { onServed, type Served } from "./lib/served";
 import { speech, useVoice, Voice } from "@hanzo/voice";
-import { ArrowUp, Mic, Paperclip, Square, Star, PanelRight, X } from "lucide-react";
+import { ArrowUp, Image as ImageMark, Mic, Paperclip, Square, Star, PanelRight, X } from "lucide-react";
 import { ENSO, FREE } from "./lib/ai";
 import { openThread, showSettings, useOpen } from "./open";
 import { Beside, Framed } from "./Shell";
@@ -418,7 +419,10 @@ function Thread({
   const ai = useAi();
   // In the app's frame the composer floats on the pane as a pane of its own.
   const framed = useContext(Framed);
-  const { thread: open, open: reopen, agents: room, openAgent, seat, emptied, aside, showAside, showSettings } = useOpen();
+  const opened = useOpen();
+  const { thread: open, open: reopen, agents: room, openAgent, seat, emptied, aside, showAside, showSettings } = opened;
+  // The conversation's key in `pane.ts`, the one the column beside it reads.
+  const at = channel(opened);
   // The first of them: what a surface that addresses one person reads.
   const withWhom = room[0] ?? null;
   // Whether the column beside this conversation is showing its summary, and the
@@ -702,22 +706,15 @@ function Thread({
   // passing value/onChange/onSend takes that ownership over rather than fighting
   // it.
   const [draft, setDraft] = useState("");
-  // FILES WITH THE NEXT MESSAGE: pressed in through the paperclip, or dropped
-  // anywhere on the room. An image rides as a picture the model reads, a text
-  // file as its words (lib/attach); anything else is refused by name here.
-  const [files, setFiles] = useState<Held[]>([]);
-  const [fileSaid, setFileSaid] = useState<string | null>(null);
+  // FILES WITH THE NEXT MESSAGE, held by `pane.ts` for this conversation: the
+  // paperclip, a drop anywhere on the room, a paste into the field and the
+  // column's `+` all go through its one `hold`, so the chips here and the rows
+  // under Sources are one list. An image rides as a picture the model reads, a
+  // text file as its words (lib/attach); anything else is refused by name.
+  const { held: files, refused: turnedAway } = usePane(at);
   const [dragging, setDragging] = useState(false);
-  const picker = useRef<HTMLInputElement | null>(null);
   const outgoing = useRef<string[]>([]);
   const depth = useRef(0);
-  const take = useCallback(async (list: FileList | readonly File[] | null | undefined) => {
-    if (!list?.length) return;
-    const out = await Promise.all(Array.from(list).map(hold));
-    setFiles((now) => [...now, ...out.filter((one): one is Held => typeof one !== "string")]);
-    const refused = out.filter((one): one is string => typeof one === "string");
-    setFileSaid(refused.length ? refused.join(" ") : null);
-  }, []);
   useSeed(initial, setDraft);
 
   // DICTATION through Hanzo's own ear: the mic records and each pause is
@@ -912,11 +909,10 @@ function Thread({
   const submit = () => {
     const text = draft.trim();
     if (!text && !files.length) return;
-    outgoing.current = images(files);
+    const going = spend(at);
+    outgoing.current = images(going);
     setDraft("");
-    setFiles([]);
-    setFileSaid(null);
-    guarded(compose(text, files));
+    guarded(compose(text, going));
   };
 
   /*
@@ -1079,7 +1075,7 @@ function Thread({
         setDragging(false);
         if (!e.dataTransfer.files?.length) return;
         e.preventDefault();
-        void take(e.dataTransfer.files);
+        void hold(at, Array.from(e.dataTransfer.files));
       }}
     >
       {dragging ? (
@@ -1100,9 +1096,12 @@ function Thread({
           rounded="var(--pane-round)"
           pointerEvents="none"
         >
-          <Text fontSize="$4" color="$ink">
-            Drop to attach
-          </Text>
+          <XStack items="center" gap="$2" px="$4" py="$2.5" rounded="$10" bg="$background" borderWidth={1} borderColor="$borderColor">
+            <Paperclip size={15} aria-hidden />
+            <Text fontSize="$4" color="$ink">
+              Drop files to attach
+            </Text>
+          </XStack>
         </YStack>
       ) : null}
       {/* The conversation's own row: its star, who is in it, and its address. */}
@@ -1540,30 +1539,33 @@ function Thread({
           // package's button and `streaming` still has to become stop; it keeps
           // `data-slot="composer-send"` so a driver finds it, and it is the same
           // `Control` circle as the mic, filled.
-          // THE PAPERCLIP opens the file picker; the same files can be dropped on
-          // the room.
+          // THE PAPERCLIP is the column's "Attach files", one press closer: the
+          // same `take`, into the same `hold`.
           children: (
-            <>
-              <Control type="button" size={ROUND} aria-label="Attach files" onClick={() => picker.current?.click()}>
-                <Paperclip size={15} aria-hidden />
-              </Control>
-              <input
-                ref={picker}
-                type="file"
-                multiple
-                hidden
-                data-slot="composer-files"
-                onChange={(e) => {
-                  void take(e.target.files);
-                  e.target.value = "";
-                }}
-              />
-            </>
+            <Tooltip>
+              <TooltipTrigger>
+                <Control type="button" size={ROUND} aria-label="Attach files" onClick={() => take(at)}>
+                  <Paperclip size={15} aria-hidden />
+                </Control>
+              </TooltipTrigger>
+              <TooltipContent>
+                <Text fontSize="$2">Attach files</Text>
+              </TooltipContent>
+            </Tooltip>
           ),
+          // A file or an image pasted into the field is held like a picked one;
+          // words paste as words.
+          field: {
+            onPaste: (e: React.ClipboardEvent) => {
+              if (!e.clipboardData?.files?.length) return;
+              e.preventDefault();
+              void hold(at, Array.from(e.clipboardData.files));
+            },
+          },
           // WHAT GOES WITH THE MESSAGE, above the frame: one chip a file, each
           // with its own remove, and the reason any file was refused.
           head:
-            files.length || fileSaid ? (
+            files.length || turnedAway ? (
               <YStack width="calc(100% - 32px)" maxW={`calc(${MEASURE} - 3rem)`} mx="auto" gap="$1.5">
                 {files.length ? (
                   <XStack gap="$1.5" flexWrap="wrap" role="list" aria-label="Attached files" data-slot="composer-attached">
@@ -1582,14 +1584,18 @@ function Thread({
                         bg="$hover"
                         maxW={260}
                       >
-                        <Paperclip size={12} aria-hidden color="var(--muted-foreground)" />
+                        {one.kind === "image" ? (
+                          <ImageMark size={12} aria-hidden color="var(--muted-foreground)" />
+                        ) : (
+                          <Paperclip size={12} aria-hidden color="var(--muted-foreground)" />
+                        )}
                         <Text fontSize="$2" color="$ink" numberOfLines={1}>
                           {one.name}
                         </Text>
                         <Box
                           render="button"
                           aria-label={`Remove ${one.name}`}
-                          onClick={() => setFiles((now) => now.filter((f) => f.id !== one.id))}
+                          onClick={() => drop(at, one.id)}
                           p="$1"
                           rounded="$10"
                           hoverStyle={{ bg: "$raised" }}
@@ -1600,9 +1606,9 @@ function Thread({
                     ))}
                   </XStack>
                 ) : null}
-                {fileSaid ? (
+                {turnedAway ? (
                   <Text role="alert" fontSize="$2" color={BAD}>
-                    {fileSaid}
+                    {turnedAway}
                   </Text>
                 ) : null}
               </YStack>

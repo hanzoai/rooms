@@ -5,20 +5,23 @@
  * model reads, and nothing else rides that wire, so a file goes one of two
  * ways: an image as a `data:` URI beside the words, a text file as its own
  * words after the message, fenced under its name. Any other kind is refused by
- * name, before anything is sent.
+ * name, before anything is held.
+ *
+ * This module judges and reads a file; `pane.ts` holds what it admits, per
+ * conversation, for the composer's chips and the column's Sources alike.
  */
 
 import type { MessagePart } from '@hanzo/ui/chat'
 
-/** A file held for the next message. */
-export interface Held {
-  id: string
-  name: string
+/** What a file contributes to a message once admitted. */
+export interface Admitted {
   kind: 'image' | 'text'
   /** A `data:` URI for an image, the words for a text file. */
   data: string
-  size: number
 }
+
+/** A file as it goes with a message. */
+export type Going = Admitted & { name: string }
 
 export const IMAGE_MAX = 8 * 1024 * 1024
 export const TEXT_MAX = 256 * 1024
@@ -28,7 +31,7 @@ const TEXT_NAME =
   /\.(md|mdx|txt|csv|tsv|json|jsonl|ya?ml|toml|xml|html?|css|scss|[cm]?[jt]sx?|py|go|rs|rb|java|kt|swift|c|cc|cpp|h|hpp|cs|php|sh|bash|zsh|sql|ini|env|log|tex|proto|graphql)$/i
 
 /** Which way a file goes with a message, or null when it cannot go. */
-export function kindOf(file: { name: string; type: string }): Held['kind'] | null {
+export function kindOf(file: { name: string; type: string }): Admitted['kind'] | null {
   if (file.type.startsWith('image/')) return 'image'
   if (TEXT_TYPE.test(file.type) || TEXT_NAME.test(file.name)) return 'text'
   return null
@@ -44,15 +47,14 @@ function read(file: File, as: 'url' | 'text'): Promise<string> {
   })
 }
 
-/** A file read and held, or the sentence that says why it cannot go. */
-export async function hold(file: File): Promise<Held | string> {
+/** A file read for a message, or the sentence that says why it cannot go. */
+export async function admit(file: File): Promise<Admitted | string> {
   const kind = kindOf(file)
   if (!kind) return `${file.name}: only images and text files go with a message.`
   const max = kind === 'image' ? IMAGE_MAX : TEXT_MAX
   if (file.size > max) return `${file.name} is larger than ${kind === 'image' ? '8 MB' : '256 KB'}.`
   try {
-    const data = await read(file, kind === 'image' ? 'url' : 'text')
-    return { id: crypto.randomUUID(), name: file.name, kind, data, size: file.size }
+    return { kind, data: await read(file, kind === 'image' ? 'url' : 'text') }
   } catch {
     return `${file.name} could not be read.`
   }
@@ -65,23 +67,24 @@ function fence(words: string): string {
 }
 
 /**
- * The message as sent: the words, then each text file fenced under its name.
- * With no words and no text file, the images' names, so the turn says what it
- * carries.
+ * The message as sent: the words, then each text file fenced with its name as
+ * the info string — the shape a model writes a file in, and the one the
+ * column's Sources reads back out of the turn. With no words and no text file,
+ * the images' names, so the turn says what it carries.
  */
-export function compose(text: string, files: readonly Held[]): string {
+export function compose(text: string, files: readonly Going[]): string {
   const blocks = files
     .filter((f) => f.kind === 'text')
     .map((f) => {
       const f3 = fence(f.data)
-      return `${f.name}\n${f3}\n${f.data.replace(/\n$/, '')}\n${f3}`
+      return `${f3}${f.name}\n${f.data.replace(/\n$/, '')}\n${f3}`
     })
   const out = [text.trim(), ...blocks].filter(Boolean).join('\n\n')
   return out || files.map((f) => f.name).join(', ')
 }
 
 /** The images of a message, as the URIs @hanzo/ai's `send` takes. */
-export const images = (files: readonly Held[]): string[] => files.filter((f) => f.kind === 'image').map((f) => f.data)
+export const images = (files: readonly Going[]): string[] => files.filter((f) => f.kind === 'image').map((f) => f.data)
 
 /** A wire turn's parts — text and `image_url` — as the parts `@hanzo/ui/chat` draws. */
 export function partsOf(content: readonly unknown[]): MessagePart[] {

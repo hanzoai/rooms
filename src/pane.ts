@@ -21,8 +21,15 @@
 // with the document that minted it, so a persisted row would come back as a
 // name pointing at nothing. A row that looks like a file and opens nothing is
 // worse than no row, so they are held for the session and no longer.
+//
+// ONE WAY IN FOR A FILE. The composer's paperclip, a drop on the room, a paste
+// into the field and the column's `+` all call `hold`, so a file is judged by
+// one rule (`lib/attach`), shows as a chip over the field and a row under
+// Sources at once, and goes with the next message. Sending spends what is
+// held; from then on the turn itself is the record Sources reads.
 
 import { useSyncExternalStore } from 'react'
+import { admit, type Admitted } from './lib/attach'
 
 /** One open tab in the pane's browser. */
 export interface Leaf {
@@ -34,13 +41,14 @@ export interface Leaf {
 }
 
 /**
- * A file the reader put into this conversation from their own disk.
+ * A file the reader put into this conversation from their own disk, read and
+ * waiting to go with the next message.
  *
  * `href` is an object URL and is the reason this is never written down — see
  * the note at the top. Everything else is read off the `File` itself, so a name
  * and a size here are the file system's, never a guess.
  */
-export interface Held {
+export interface Held extends Admitted {
   id: string
   name: string
   size: number
@@ -57,11 +65,13 @@ export interface Pane {
   /** Whether the summary column stands beside the browser. */
   pinned: boolean
   held: Held[]
+  /** Why the last files offered were refused, in the reader's words, or null. */
+  refused: string | null
 }
 
 /** A pane nobody has touched. Shared, and never mutated — see `EMPTY` in
  *  `open.ts` for why a fresh object per read is an infinite render. */
-const BARE: Pane = { tabs: [], at: null, pinned: true, held: [] }
+const BARE: Pane = { tabs: [], at: null, pinned: true, held: [], refused: null }
 
 /** The half of a pane worth writing down. */
 type Kept = Pick<Pane, 'tabs' | 'at' | 'pinned'>
@@ -140,6 +150,7 @@ function read(key: string): Pane {
         at: tabs.some((t) => t.id === kept.at) ? (kept.at as string) : (tabs[0]?.id ?? null),
         pinned: kept.pinned !== false,
         held: [],
+        refused: null,
       }
     }
   } catch {
@@ -253,17 +264,55 @@ export function pin(key: string, on: boolean): void {
   edit(key, (was) => (was.pinned === on ? was : { ...was, pinned: on }))
 }
 
-/** Takes files from the reader's disk into this conversation. */
-export function hold(key: string, files: File[]): void {
+/**
+ * Takes files from the reader's disk into this conversation.
+ *
+ * Each is judged and read by `admit`; what is refused is said by name in
+ * `refused` and nothing of it is held, so a chip never stands for a file that
+ * cannot go.
+ */
+export async function hold(key: string, files: readonly File[]): Promise<void> {
   if (!files.length) return
-  const taken = files.map((f) => ({
-    id: mint('h'),
-    name: f.name,
-    size: f.size,
-    type: f.type,
-    href: URL.createObjectURL(f),
-  }))
-  edit(key, (was) => ({ ...was, held: [...was.held, ...taken] }))
+  const judged = await Promise.all(files.map(admit))
+  const taken: Held[] = []
+  const refused: string[] = []
+  judged.forEach((one, i) => {
+    const file = files[i]
+    if (typeof one === 'string') refused.push(one)
+    else taken.push({ id: mint('h'), name: file.name, size: file.size, type: file.type, href: URL.createObjectURL(file), ...one })
+  })
+  edit(key, (was) => ({ ...was, held: [...was.held, ...taken], refused: refused.length ? refused.join(' ') : null }))
+}
+
+/**
+ * Asks for files and holds what is given.
+ *
+ * The picker is the browser's, minted and dropped per press rather than kept as
+ * a hidden input in the markup: a menu row is not a form control, and an
+ * `<input type=file>` parked in the tree is one more thing for a screen reader
+ * to walk past.
+ */
+export function take(key: string): void {
+  if (typeof document === 'undefined') return
+  const ask = document.createElement('input')
+  ask.type = 'file'
+  ask.multiple = true
+  ask.onchange = () => void hold(key, Array.from(ask.files ?? []))
+  ask.click()
+}
+
+/**
+ * Hands over everything held to go with a message, and lets go of it.
+ *
+ * The turn carries each file from here — an image as its `data:` URI, a text
+ * file as its words. The object URLs are left standing, so a tab already open
+ * on one keeps showing it.
+ */
+export function spend(key: string): Held[] {
+  const was = read(key)
+  if (!was.held.length && !was.refused) return []
+  write(key, { ...was, held: [], refused: null })
+  return was.held
 }
 
 /** Lets go of a file, and of the handle the browser minted for it. */
