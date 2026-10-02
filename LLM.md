@@ -24,7 +24,6 @@ Two halves, because two kinds of caller read them.
 // Once, at module scope, in a module the host's root imports (pure: where.ts).
 import { configure } from '@hanzo/rooms'
 configure({ site: '', home: '/home', signUp: '/signup', api, iam, key, plans })
-configure({ integrations: () => import('@/lib/integrations').then((m) => m.INTEGRATIONS) })
 ```
 
 ```tsx
@@ -38,14 +37,16 @@ configure({ integrations: () => import('@/lib/integrations').then((m) => m.INTEG
 |---|---|---|
 | `site` — where the app's pages live (`/dev`, `/legal/*`, `/pricing`) | `''` | `https://hanzo.ai` |
 | `home` — the rooms' Home | `/home` | `/` |
-| `brand` — the product's name, on Home and the setup | `Hanzo` (default) | `Hanzo Team` |
+| `brand` — the product's name wherever a room prints it: the sidebar's wordmark, Home's and Chat's titles, the composer's placeholder, the setup, the shared page (`brand()`) | `Hanzo AI` (default) | `Hanzo Team` (`@hanzogui/shell/registry` `brandName`) |
 | `signUp` | `/signup` | `/start` |
 | `Landing`, `Signup` — the front door of a workspace rooted at `/` | — | team's components |
 | `team` — every room behind the per-seat Team plan, organizations founded through `Start` | — | `true` |
 | `track` — the host's own funnel call, where it boots its own tags | — (@hanzo/event's tag manager) | `lib/analytics/tags` |
-| `plans` — the first-paint plan catalogue | build data | — |
-| `integrations` — a loader for Directory's Apps tab, so the catalogue (every guide's code, and the model counts it quotes) loads when the tab opens | `lib/integrations` | `lib/integrations` |
+| `plans` — the first-paint plan catalogue | build data | — (the live `GET /v1/billing/plans`) |
 
+- A string a room prints that names the product reads `brand()` at render
+  time, never a literal: "Hanzo AI" written into a room is "Hanzo AI" on
+  hanzo.team.
 - Plain modules read addresses through `where()` / `site()` and must import
   them from `./where`, never `./host`: `host.tsx` is `'use client'`, and a
   server component calling a client module's export throws ("Attempted to call
@@ -91,6 +92,16 @@ configure({ integrations: () => import('@/lib/integrations').then((m) => m.INTEG
   (`@hanzo/rooms/lib/session`) and keep no copy.
 - `src/team.gen.ts` — the core team's persona files as strings, generated from
   `@hanzo/personas` by `scripts/team.mjs`, so no host needs an asset loader.
+- `src/lib/integrations.ts` — the integrations catalogue, the one copy:
+  hanzo.ai's /integrations pages render it, Directory's "Works with" tab lists
+  it (loaded when the tab opens).
+- `src/lib/terms.ts` — the Terms and AUP versions (`POLICY`), the one copy:
+  hanzo.ai's legal pages print them, every sign-up card records them.
+- `assets/` — the files the rooms name by path: the cast's portraits
+  (`assets/agents`, `/agents/<id>.png` in `cast.tsx`) and the Bots room's
+  avatars (`assets/bots`). A host serves the directory at its root: it copies
+  `@hanzo/rooms/assets` into `public/` on `prebuild`/`predev` and keeps no
+  copy in git.
 
 ## Build and ship
 
@@ -121,8 +132,8 @@ label, `SpeakButton`'s, Meet's status line).
 
 ## What each app still owns
 
-hanzo.ai: its marketing site, the app at `/` (`_web.tsx`), the integrations and
-plan data, `lib/models` (the catalogue; naming comes from `@hanzo/rooms/lib/models`).
+hanzo.ai: its marketing site, the app at `/` (`_web.tsx`), the plan snapshot,
+`lib/models` (the catalogue; naming comes from `@hanzo/rooms/lib/models`).
 hanzo.team: its landing, sign-up, sign-in gate, the `/agents` page, and its own
 `lib/host` (BRAND, BOOKING), `lib/auth/client` (its sign-in flow) and
 `lib/analytics/tags` (its GA4/Pixel boot).
