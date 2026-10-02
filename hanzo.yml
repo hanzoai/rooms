@@ -1,0 +1,13 @@
+# Hanzo CI/CD. A package, not an image: the gate is the typecheck and the
+# build the publish runs, and npm is where it ships (.github/workflows/publish.yml).
+test:
+  - name: build
+    run: |
+      set -e
+      corepack enable
+      pnpm install --frozen-lockfile
+      pnpm typecheck
+      pnpm test
+      pnpm build
+      test -s dist/index.js
+      test -s dist/index.d.ts
