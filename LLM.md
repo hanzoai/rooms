@@ -50,9 +50,11 @@ configure({ plans, integrations })       // only where the rooms draw — heavy
   after the module evaluates. Read at call time (`get route()`, `invite()`,
   `dev()`, `signUp()`).
 - The session is IAM's (`@hanzo/iam/react`; the host mounts `IamProvider`).
-- The look is `@hanzo/appearance`'s: `<Rooms>` applies the person's layers for
-  the org in scope and syncs them with IAM (`useLook`); the Settings panel is the
-  Appearance panel, theme row included. No theme library is imported.
+- The look is `@hanzo/appearance`'s. The host mounts `<Look />` once at its
+  root, inside `IamProvider`: it applies the person's layers for the org in
+  scope on every page and syncs them with IAM when signed in (`useLook`). The
+  Settings panel is the Appearance panel, theme row included. No theme library
+  is imported.
 - Navigation to another origin (`site()` on hanzo.team) is a document load in
   `Room`; same-origin routes go through the host's router.
 

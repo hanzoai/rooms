@@ -94,17 +94,16 @@ export function useLook() {
   })
 }
 
-/** The look, applied on every surface that mounts the rooms. */
-function Look() {
+/**
+ * The look, applied: mounted once at the host's root, inside its IamProvider,
+ * so every page — a room or not — opens in the person's theme and accent and
+ * keeps their choice in step with IAM.
+ */
+export function Look() {
   useLook()
   return null
 }
 
 export function Rooms({ router, search = null, route, Link, children }: RoomsProps) {
-  return (
-    <Context.Provider value={{ router, search, route, Link }}>
-      <Look />
-      {children}
-    </Context.Provider>
-  )
+  return <Context.Provider value={{ router, search, route, Link }}>{children}</Context.Provider>
 }

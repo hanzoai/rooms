@@ -10,5 +10,5 @@
  */
 export { configure, where, site } from './where'
 export type { Addresses } from './where'
-export { Rooms, useRooms, useLook, useOrg } from './host'
+export { Rooms, Look, useRooms, useLook, useOrg } from './host'
 export type { Router, Link, RoomsProps } from './host'
