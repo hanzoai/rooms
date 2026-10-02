@@ -100,6 +100,25 @@ Gates: `pnpm typecheck`, `pnpm lint:design` (ratchet in
 `hanzo-design.allow.json`), `pnpm build`. Publish: bump `version`, push main;
 `.github/workflows/publish.yml` publishes what npm does not serve.
 
+## Voice
+
+Every voice path runs on `@hanzo/voice` against the platform's speech
+services, with the reader's IAM bearer (`useIamToken`) and the host from
+`base()`: `/v1/audio/transcriptions` (`zen-scribe`) listens, `/v1/audio/speech`
+(`zen-voice-mini`) reads. The browser's recogniser and speechSynthesis only
+stand in when the platform refuses, and the refusal is shown (`<Voice/>`'s
+label, `SpeakButton`'s, Meet's status line).
+
+- Chat's mic dictates into the draft. While it is open a finished reply is read
+  through the machine's `say`, part by part in each speaker's voice.
+- Meet's hands-free is the same machine: each utterance is answered and the
+  answer read by `say`, so barge-in stops it.
+- Listen (`SpeakButton`), the Meet speaker test and briefing use `speakAgent`,
+  called from the click so Safari lets the reply play.
+- `cast.tsx` voices are speech-service ids (`am_michael`, `bf_emma`): first
+  letter accent, second register. Never OpenAI names.
+- The model picker never offers a model whose `outputs` lacks `text`.
+
 ## What each app still owns
 
 hanzo.ai: its marketing site, the app at `/` (`_web.tsx`), the integrations and
