@@ -26,8 +26,7 @@
 import { createContext, useContext, type AnchorHTMLAttributes, type ComponentType, type ReactNode } from 'react'
 import { useIam, useOrganizations } from '@hanzo/iam/react'
 import { useAppearance } from '@hanzo/appearance'
-import type { BillingPlan } from './lib/plans'
-import type { Integration } from './lib/integrations'
+import { where } from './where'
 
 /** A link the host's router owns: next/link under Next, an anchor elsewhere. */
 export type Link = ComponentType<AnchorHTMLAttributes<HTMLAnchorElement> & { href: string; prefetch?: boolean }>
@@ -39,53 +38,6 @@ export interface Router {
   forward(): void
 }
 
-/** The addresses a host serves from, which plain modules read. */
-export interface Addresses {
-  /** The gateway's origin. Absent, the rooms derive it from the page's host. */
-  api?: string
-  /** IAM's origin. Absent, hanzo.id. */
-  iam?: string
-  /**
-   * Where the app's own pages live — `/dev`, `/account`, `/legal/*`.
-   * Empty on the site that serves them; `https://hanzo.ai` on hanzo.team.
-   */
-  site: string
-  /** The rooms' Home: `/home` beside the app, `/` on hanzo.team. */
-  home: string
-  /** Where a new account starts: `/signup`, or hanzo.team's `/start`. */
-  signUp: string
-  /** The publishable key anonymous calls carry. */
-  key?: string
-  /** The plan catalogue as the host's build last read it: the first paint. */
-  plans?: BillingPlan[]
-  /** The SDKs and frameworks Directory lists, which the host publishes. */
-  integrations?: Integration[]
-  /**
-   * The host's front door, for a workspace rooted at `/` (hanzo.team): what a
-   * stranger at Home is shown instead of the sign-in, and the business sign-up
-   * `/start` draws. A host without one gets the sign-in.
-   */
-  Landing?: ComponentType<{ member?: boolean }>
-  Signup?: ComponentType
-}
-
-let addresses: Addresses = { site: '', home: '/home', signUp: '/signup' }
-
-/**
- * State the host's addresses, at module scope, before anything renders. Each
- * call adds to what is stated, so a host can name its cheap addresses at its
- * root and the heavy ones (the plan catalogue, the integrations) only where the
- * rooms are drawn.
- */
-export function configure(given: Partial<Addresses>): void {
-  addresses = { ...addresses, ...given }
-}
-
-/** The host's addresses, for code that runs outside a component. */
-export const where = (): Addresses => addresses
-
-/** A page of the app's own, from wherever the rooms are mounted. */
-export const site = (path: string): string => `${addresses.site}${path}`
 
 interface Moving {
   router: Router
@@ -133,7 +85,7 @@ export function useLook() {
   const org = useOrg()
   return useAppearance({
     org: org.id,
-    account: { base: (addresses.iam ?? 'https://hanzo.id').replace(/\/+$/, ''), token: accessToken ?? undefined },
+    account: { base: (where().iam ?? 'https://hanzo.id').replace(/\/+$/, ''), token: accessToken ?? undefined },
   })
 }
 

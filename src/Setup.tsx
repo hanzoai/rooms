@@ -16,7 +16,7 @@ import { firstRun } from '@hanzo/ui/onboarding'
 import { useKept } from './kept'
 import { orgs } from './lib/session'
 import { api } from './lib/api'
-import { site } from './host'
+import { site } from './where'
 
 /** Put away in this browser. */
 const LATER = 'hanzo.onboarding.later'

@@ -27,7 +27,7 @@ import { useIam } from '@hanzo/iam/react'
 import { ORG, bearer, hasSession, org } from './session'
 import { createAiClient, type AiClient } from '@hanzo/ai'
 import { observed } from './served'
-import { where } from '../host'
+import { where } from '../where'
 
 /**
  * The tenant a signed-out turn is recorded against: the publishable key IAM

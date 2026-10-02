@@ -14,7 +14,8 @@
 // to view as. What is here is what there is: the picture can be changed, the
 // record can be edited, and the rest is read.
 
-import { site, useRooms } from './host'
+import { useRooms } from './host'
+import { site } from './where'
 import { useRef, useState } from 'react'
 import { Camera, Mail, Phone, X } from 'lucide-react'
 import { Box, Text, View, XStack, YStack } from '@hanzo/ui'

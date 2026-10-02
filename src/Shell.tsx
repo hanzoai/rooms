@@ -200,7 +200,7 @@ import {
 } from "./contacts-store";
 import { bare } from './lib/bare'
 import { BAD } from './lib/mix'
-import { site, where } from './host'
+import { site, where } from './where'
 
 export type Mode =
   | "home"

@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { useIam } from '@hanzo/iam/react'
 import { useAi } from './lib/ai'
-import { where } from './host'
+import { where } from './where'
 
 /**
  * A room as Team keeps it: a channel, a direct message, or a room bound to work.

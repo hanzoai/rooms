@@ -75,7 +75,7 @@ import { Upgrade, useFree, type Ask } from './Upgrade';
 import { enter, LOGIN } from './lib/destination';
 import { first } from './lib/first';
 import { mix } from "./lib/mix";
-import { site } from './host'
+import { site } from './where'
 
 /** The veil under the free lane's consent sheet. */
 const SCRIM = mix("var(--pure-black)", 72, "srgb");

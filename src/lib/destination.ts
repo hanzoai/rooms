@@ -22,7 +22,7 @@
 
 import { apex, guest, SIGNIN } from "./host";
 import { SHARED } from "./share";
-import { where } from "../host";
+import { where } from "../where";
 
 /** The default on the apex: the app, which is `/` for anyone signed in
  *  (app/page.tsx). It answers the case where there is no page to go back to (a

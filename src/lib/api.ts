@@ -21,7 +21,7 @@
  */
 
 import { guest, team } from './host'
-import { where } from '../host'
+import { where } from '../where'
 
 /** The gateway's origin, with no trailing slash: callers write `${api()}/v1/…`. */
 export function api(): string {

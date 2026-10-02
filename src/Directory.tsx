@@ -54,7 +54,7 @@ import {
 } from '@hanzo/ui'
 import { Grid } from '@hanzo/ui/grid'
 import { useIam } from '@hanzo/iam/react'
-import { where } from './host'
+import { where } from './where'
 import { ProviderMark } from './ProviderMark'
 import { say } from './failure'
 import { api } from './lib/api'
@@ -63,7 +63,7 @@ import { enter } from './lib/destination'
 import { Action } from '@hanzo/ui/marketing'
 import { tap } from './lib/tap'
 import { GOOD } from './lib/mix'
-import { site } from './host'
+import { site } from './where'
 
 /**
  * The console, which is a PRODUCT ADDRESS rather than an environment.

@@ -14,7 +14,7 @@
  */
 
 import APP from './rooms.json' with { type: 'json' }
-import { site } from '../host'
+import { site } from '../where'
 
 /** The workspace's own address. */
 export const WORKSPACE = 'https://hanzo.team'

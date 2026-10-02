@@ -13,7 +13,7 @@
  */
 
 import type { AiClient } from '@hanzo/ai'
-import { site } from '../host'
+import { site } from '../where'
 
 /** A site the org has deployed. */
 export interface Project {

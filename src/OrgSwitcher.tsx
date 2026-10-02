@@ -9,7 +9,7 @@ import { useAccount } from './lib/account'
 import { iam } from './lib/api'
 import { pick } from './lib/session'
 import { Text, View, XStack, YStack, type GuiElement } from '@hanzo/gui'
-import { site } from './host'
+import { site } from './where'
 
 /** design's smallest rung (`--text-floor`, 10px), below gui's `$1`; gui's font size takes a rung or a number. */
 const FLOOR = 10
