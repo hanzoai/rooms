@@ -1,0 +1,111 @@
+{
+  "name": "@hanzo/rooms",
+  "version": "0.1.0",
+  "description": "The workspace rooms \u2014 Home, Chat, Inbox, Contacts, Meet, Cal, Drive, Board, Work, Bots \u2014 and the frame that holds them, once, for every Hanzo surface.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js",
+      "default": "./dist/*.js"
+    },
+    "./lib/*": {
+      "types": "./dist/lib/*.d.ts",
+      "import": "./dist/lib/*.js",
+      "default": "./dist/lib/*.js"
+    },
+    "./bots/*": {
+      "types": "./dist/bots/*.d.ts",
+      "import": "./dist/bots/*.js",
+      "default": "./dist/bots/*.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE-APACHE",
+    "LICENSE-MIT"
+  ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "gen": "node scripts/team.mjs",
+    "build": "rm -rf dist && node scripts/team.mjs && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "prepack": "pnpm run build"
+  },
+  "license": "Apache-2.0 OR MIT",
+  "dependencies": {
+    "marked": "catalog:",
+    "simple-icons": "catalog:"
+  },
+  "peerDependencies": {
+    "@hanzo/ai": ">=0.6.17",
+    "@hanzo/appearance": ">=0.2.6",
+    "@hanzo/build": ">=0.2.34",
+    "@hanzo/composer": ">=0.2.0",
+    "@hanzo/event": ">=0.3.56",
+    "@hanzo/gui": "^8.3.5",
+    "@hanzo/iam": ">=0.21.28",
+    "@hanzo/logo": ">=1.0.26",
+    "@hanzo/personas": ">=1.0.5",
+    "@hanzo/plans": ">=1.8.9",
+    "@hanzo/ui": ">=8.27.51",
+    "@hanzo/usage": ">=0.1.17",
+    "@hanzo/voice": ">=0.1.8",
+    "@hanzogui/shell": "^8.3.20",
+    "@zenlm/models": ">=1.0.4",
+    "lucide-react": ">=1.42.0",
+    "react": ">=19.2.8",
+    "react-dom": ">=19.2.8"
+  },
+  "devDependencies": {
+    "@hanzo/ai": "catalog:",
+    "@hanzo/appearance": "catalog:",
+    "@hanzo/build": "catalog:",
+    "@hanzo/composer": "catalog:",
+    "@hanzo/event": "catalog:",
+    "@hanzo/gui": "catalog:",
+    "@hanzo/iam": "catalog:",
+    "@hanzo/logo": "catalog:",
+    "@hanzo/personas": "catalog:",
+    "@hanzo/plans": "catalog:",
+    "@hanzo/ui": "catalog:",
+    "@hanzo/usage": "catalog:",
+    "@hanzo/voice": "catalog:",
+    "@hanzogui/config": "catalog:",
+    "@hanzogui/core": "catalog:",
+    "@hanzogui/shell": "catalog:",
+    "@hanzogui/web": "catalog:",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@zenlm/models": "catalog:",
+    "lucide-react": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-native-web": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "@hanzo/design": "catalog:",
+    "@hanzogui/lucide-icons-2": "catalog:"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hanzoai/rooms.git"
+  },
+  "packageManager": "pnpm@11.24.0",
+  "engines": {
+    "node": ">=22.18"
+  }
+}

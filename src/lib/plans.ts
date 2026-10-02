@@ -1,0 +1,379 @@
+/**
+ * The subscription catalog, in one place, for every pricing surface.
+ *
+ * THERE ARE TWO CATALOGS AND THEY ARE DIFFERENT PRODUCTS. Confusing them is
+ * what this module exists to prevent:
+ *
+ *   GET /v1/billing/plans   THIS ONE. commerce's subscription authority — the
+ *                           same rows that charge. 17 plans across categories
+ *                           personal/team/enterprise/world/social/dns, each
+ *                           with `features`. Bare ARRAY, `slug`, `price` in
+ *                           CENTS.
+ *   GET /v1/plans           Cloud VM tiers — vcpus, memoryGB, diskGB. 11 rows,
+ *                           NO `features` on any of them. Shaped `{plans:[…]}`.
+ *
+ * They collide on the words "pro" and "enterprise" and on nothing else: `pro`
+ * the subscription is $20/mo, `pro` the VM tier is $25/mo for 2 vCPU. Reading
+ * the VM catalog to render subscriptions is not a wrong number, it is a wrong
+ * product — and it crashed this page. The team/enterprise view filtered /v1/plans
+ * for `category === "enterprise"`, matched the $429 VM row, replaced the real
+ * Team/Enterprise cards with it, and handed a card `features: undefined`. The
+ * `.map()` over it took the whole pricing page down to "Something went wrong."
+ * for anyone who clicked the tab.
+ *
+ * So the catalog is named once, mapped once, and guarded once, here.
+ *
+ * A SuperAdmin edits these rows at admin.hanzo.ai (/v1/commerce/plans/entries),
+ * and every reader here follows: the build bakes the authority's answer into the
+ * pricing snapshot for the first paint, and the page replaces it with the live
+ * read. No price in this repo is typed; @hanzo/plans is read only for what the
+ * wire does not carry — a plan's name for a slug, and the Free row's models.
+ */
+
+import { useEffect, useMemo, useState } from "react";
+import { subscriptionPlans } from "@hanzo/plans";
+import { where } from "../host";
+import { api } from "./api";
+import { org } from "./session";
+
+/** A row exactly as GET /v1/billing/plans returns it. */
+export interface BillingPlan {
+  slug: string;
+  name: string;
+  description: string;
+  price: number | null;
+  priceAnnual?: number | null;
+  annualTotal?: number | null;
+  category: string;
+  features?: string[];
+  limits?: Record<string, number | null>;
+  popular?: boolean;
+  contactSales?: boolean;
+  perSeat?: boolean;
+  checkoutUrl?: string;
+  checkoutId?: string;
+}
+
+/** A plan as the pricing cards render it: dollars, and features always present. */
+export interface SubscriptionPlan {
+  id: string;
+  name: string;
+  description: string;
+  priceMonthly: number | null;
+  /** A year shown per month: what each month costs when a year is bought. */
+  priceAnnual?: number | null;
+  /** What a year charges, once, where the catalog sells a year: `annualTotal`. */
+  annualTotal?: number | null;
+  category: string;
+  popular?: boolean;
+  contactSales?: boolean;
+  pricePerUser?: boolean;
+  features: string[];
+  limits?: Record<string, number | null>;
+  payouts?: { idleResalePercent: number; description: string };
+  checkoutUrl?: string;
+  checkoutId?: string;
+}
+
+/**
+ * Where money changes hands: the checkout, mounted at hanzo.ai/pay so a buyer
+ * never leaves the site. It is hanzo-inc/pay, served from the same export
+ * pay.hanzo.ai was; that host now redirects here.
+ *
+ * billing.hanzo.ai has no route at the edge and answers 404, and /billing on
+ * this site is the Billing PRODUCT's page — a reader sent there to buy a plan
+ * lands on marketing. /pay takes `?plan=`, `?interval=`, `?returnUrl=` and
+ * `?org=`, and comes back. Every "add credit" and "billing" link reads this one
+ * address. Absolute, because this export also serves cloud.hanzo.ai and
+ * hanzo.bot, and the checkout lives on hanzo.ai.
+ */
+const BILLING_URL = "https://hanzo.ai/pay";
+
+/**
+ * The checkout address, opened on a plan when one is named, and returning to
+ * `back` once the buyer has paid. Without `back` a paid buyer lands on the pay
+ * site's receipt with no way into what they bought.
+ *
+ * ONE writer for this address. It was spelled out in three places — the
+ * personal ladder, the business strip and the /account hand-off — and a plan id
+ * only selects the card a reader clicked if every writer spells the query the
+ * same way.
+ */
+export function checkoutUrl(id?: string, back?: string): string {
+  return payUrl(id ? "/cart" : "/", { plan: id, returnUrl: back });
+}
+
+/**
+ * A page on the pay site, for the organization this browser works in.
+ *
+ * pay charges and reads the ledger it is named, and it can only offer the ones
+ * the token lists; which of them this workspace is in is a fact only this site
+ * holds. `?org=` carries it across, and pay honours it only while the token
+ * offers it. Call it at the moment of leaving: the organization lives in this
+ * browser and moves with the switcher.
+ */
+export function payPage(path = "/"): string {
+  return payUrl(path, { org: org() });
+}
+
+/** The pay address with its query, written in one place for both callers above. */
+function payUrl(path: string, query: Record<string, string | null | undefined>): string {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(query)) if (v) q.set(k, v);
+  const s = q.toString();
+  if (path === "/" && !s) return BILLING_URL;
+  return `${BILLING_URL}${path}${s ? `?${s}` : ""}`;
+}
+
+/**
+ * The checkout a plan's CTA opens.
+ *
+ * A catalog row may carry its own link, and then that link wins; otherwise the
+ * id is the whole address. The id is also what `plan_clicked` reports, so the
+ * plan the event names and the plan the checkout opens cannot disagree.
+ */
+export function planCheckoutUrl(plan: SubscriptionPlan, back?: string): string {
+  return plan.checkoutUrl || checkoutUrl(plan.checkoutId || plan.id, back);
+}
+
+/** A subscription term. A month is what every catalog row charges by default. */
+export type Interval = "month" | "year";
+
+/**
+ * A checkout address for a term: a year adds `interval=year`, a month leaves the
+ * address as it is. pay reads the parameter; until it sells a year, its cart
+ * states the monthly charge, and the buyer reads that before paying. A relative
+ * address is read against the pay site, where every checkout is.
+ */
+export function term(href: string, interval: Interval): string {
+  if (interval === "month") return href;
+  const url = new URL(href, BILLING_URL);
+  url.searchParams.set("interval", "year");
+  return url.toString();
+}
+
+/**
+ * Billing speaks CENTS; these pages render dollars. Converting here, once, at
+ * the boundary — a price that is 100x wrong on a checkout page is the worst
+ * possible rounding bug, so it converts in exactly one place and nowhere else.
+ *
+ * `features` defaults to [] because a card maps over it. A plan that arrives
+ * without features should render as a plan with no features listed, never as a
+ * blank page.
+ */
+function fromBillingPlan(p: BillingPlan): SubscriptionPlan {
+  return {
+    id: p.slug,
+    name: p.name,
+    description: p.description,
+    priceMonthly: p.price == null ? null : p.price / 100,
+    priceAnnual: p.priceAnnual == null ? null : p.priceAnnual / 100,
+    annualTotal: p.annualTotal ? p.annualTotal / 100 : null,
+    category: p.category,
+    popular: p.popular,
+    contactSales: p.contactSales,
+    pricePerUser: p.perSeat,
+    features: p.features ?? [],
+    limits: p.limits,
+    checkoutUrl: p.checkoutUrl,
+    checkoutId: p.checkoutId,
+  };
+}
+
+/**
+ * The authority's rows as the build last read them — scripts/sync-pricing.mjs
+ * takes GET /v1/billing/plans into lib/data/plans.json on every build. It is the
+ * first paint, and the whole answer wherever the live read fails: a preview host
+ * the API does not admit, a reader offline, an outage. The SAME rows as the live
+ * read, so the two can differ only by what a SuperAdmin changed since the build.
+ */
+const baked = (): BillingPlan[] => where().plans ?? [];
+
+/**
+ * The catalog, live — or null when commerce did not answer.
+ *
+ * The difference is the whole point. Commerce is where a plan is listed or
+ * archived, so "this category sells nothing right now" is a real answer an admin
+ * can produce, and it has to reach the page: archiving the last rung in a
+ * category should empty it, not leave the build-time copy standing in as if
+ * nothing had changed. A transport error or a non-2xx is null, and a caller keeps
+ * the snapshot for it — a commerce outage must not blank the pricing page.
+ *
+ * ONE READ PER PAGE. Every hook below asks for the whole catalog and filters it,
+ * so a page drawing four categories costs one request, not four.
+ */
+let reading: Promise<BillingPlan[] | null> | null = null;
+
+function live(): Promise<BillingPlan[] | null> {
+  reading ??= fetch(`${api()}/v1/billing/plans`)
+    .then(async (res) => {
+      if (!res.ok) return null;
+      const body = await res.json();
+      // The catalog answers with a bare array. Tolerate {plans:[…]} so a proxy
+      // that wraps it cannot silently yield zero rows. Anything else is not a
+      // catalog, and reading it as an empty one would blank the page on a shape
+      // change rather than on a decision.
+      return Array.isArray(body) ? body : Array.isArray(body?.plans) ? body.plans : null;
+    })
+    .catch(() => null);
+  return reading;
+}
+
+/** The plans in one category, live — or null when commerce did not answer. */
+export async function loadPlans(category: string): Promise<SubscriptionPlan[] | null> {
+  const rows = await live();
+  return rows === null ? null : rows.filter((p) => p?.category === category).map(fromBillingPlan);
+}
+
+/** The plans in one category as the build last read them. */
+export function fallbackPlans(category: string): SubscriptionPlan[] {
+  return baked().filter((p) => p.category === category).map(fromBillingPlan);
+}
+
+/**
+ * Every row the authority serves, in catalog order: painted from the snapshot,
+ * replaced by the live read. This is how an edit made at admin.hanzo.ai reaches
+ * a reader with no build in between.
+ */
+export function useCatalog(): SubscriptionPlan[] {
+  const [rows, setRows] = useState<SubscriptionPlan[]>(() => baked().map(fromBillingPlan));
+  useEffect(() => {
+    let open = true;
+    live().then((got) => {
+      if (open && got) setRows(got.map(fromBillingPlan));
+    });
+    return () => {
+      open = false;
+    };
+  }, []);
+  return rows;
+}
+
+/** Dollars as a price is written: two places, always, so a card and a button agree. */
+const dollars = (n: number) => `$${n.toFixed(2)}`;
+
+/** The row an organization runs on, priced. */
+export interface OrgPlan {
+  plan: SubscriptionPlan | null;
+  /** The monthly price as money. An em dash until a row resolves — never a guess. */
+  price: string;
+}
+
+/**
+ * Which plan an organization runs on, and what it costs. A plan is a
+ * subscription with usage limits; it mints no credit, so nothing here says it does.
+ *
+ * ONE ANSWER FOR TWO SURFACES. /pricing states the offer and the workspace gate
+ * asks a member to buy it; those were two readings of one row, each with its own
+ * copy of "the first personal row that charges" and its own money formatter. A
+ * marketing page and a subscribe screen quoting different numbers for the same
+ * plan is the failure that costs a sale, and it needs only for one of the two
+ * copies to be edited.
+ *
+ * It is the FIRST ROW THAT CHARGES in a category: `personal` is the plan a
+ * personal organization runs on, `team` the per-seat plan a team organization
+ * runs on, whatever commerce currently prices each at. Neither surface holds the
+ * figure, so neither can be wrong on its own.
+ *
+ * Painted from the snapshot and replaced by the live catalog, which is the
+ * contract every reader in this module keeps.
+ */
+export function usePlan(category = "personal"): OrgPlan {
+  return priced(usePlans(category).find((p) => (p.priceMonthly ?? 0) > 0) ?? null);
+}
+
+/**
+ * A category's rows a reader can buy on their own, in catalog order: the
+ * personal ladder from Free up, or the Team plan. Rows sold through a
+ * conversation are left out. Painted from the snapshot, replaced by the catalog.
+ */
+export function usePlans(category: string): SubscriptionPlan[] {
+  const all = useCatalog();
+  return useMemo(() => all.filter((p) => p.category === category && !p.contactSales), [all, category]);
+}
+
+/** A row priced the way every surface writes it. */
+export function priced(plan: SubscriptionPlan | null): OrgPlan {
+  return { plan, price: plan ? dollars(plan.priceMonthly ?? 0) : "—" };
+}
+
+/** Money as a sentence says it: whole dollars bare, anything else to the cent — $20, $16.67. */
+export const money = (n: number) => (Number.isInteger(n) ? `$${n.toLocaleString("en-US")}` : dollars(n));
+
+/**
+ * What one term of a plan charges, in dollars, or null where the catalog sells
+ * no such term. A month is `priceMonthly`. A year is the total the catalog
+ * states, or twelve of `priceAnnual` where it states only the monthly figure.
+ */
+export function charge(plan: SubscriptionPlan, interval: Interval): number | null {
+  const n =
+    interval === "month"
+      ? plan.priceMonthly
+      : (plan.annualTotal ?? (plan.priceAnnual ? Math.round(plan.priceAnnual * 1200) / 100 : null));
+  return n && n > 0 ? n : null;
+}
+
+/**
+ * A term's price as a button quotes it — "$20/month", "$200/year" — or null.
+ * A year is quoted as the total where the catalog states one, and otherwise as
+ * the monthly figure the catalog does state, never as a total derived here.
+ */
+export function quote(plan: SubscriptionPlan, interval: Interval): string | null {
+  if (interval === "month") return plan.priceMonthly ? `${money(plan.priceMonthly)}/month` : null;
+  if (plan.annualTotal) return `${money(plan.annualTotal)}/year`;
+  return plan.priceAnnual ? `${money(plan.priceAnnual)}/month, billed yearly` : null;
+}
+
+/** What a year saves against twelve months, as a whole percent: 1 − year ÷ (12 × month). Null where it saves nothing. */
+export function saving(plan: SubscriptionPlan): number | null {
+  const month = charge(plan, "month");
+  const year = charge(plan, "year");
+  if (!month || !year || year >= 12 * month) return null;
+  return Math.round((1 - year / (12 * month)) * 100);
+}
+
+/** The models the Free plan runs, as @hanzo/plans states them: `ai.models` on the `free` row. */
+const FREE_MODELS: ReadonlySet<string> = new Set(
+  ((subscriptionPlans as CatalogPlan[]).find((p) => p.id === "free")?.entitlements?.["ai.models"] as
+    | string[]
+    | undefined) ?? [],
+);
+
+/** Whether the Free plan runs a model: one its row names, or any `:free` route. */
+export function onFree(model: string): boolean {
+  return FREE_MODELS.has(model) || model.endsWith(":free");
+}
+
+/**
+ * The catalog's own name for a plan slug — "max-20x" reads as "Max 20x" —
+ * or null where the slug is empty or the catalog does not carry it.
+ *
+ * Read off the published package: a plan's name does not move between a build and the next release the way
+ * its price can, so the bundled copy is not a stale answer here the way it
+ * would be for money. A reader of `GET /v1/billing/tier`'s `plan` field
+ * needs a name and nothing else, so no live fetch is spent proving what the
+ * package already states.
+ */
+export function planName(slug: string | null | undefined): string | null {
+  if (!slug) return null;
+  const row = (subscriptionPlans as CatalogPlan[]).find((p) => p.id === slug);
+  return row?.name ?? null;
+}
+
+/** The two fields of a published @hanzo/plans row this module reads. */
+interface CatalogPlan {
+  id: string;
+  name: string;
+  entitlements?: Record<string, unknown>;
+}
+
+/**
+ * A usage rate as money. A sub-dollar rate needs at least two decimals to read as
+ * a price at all — 0.1 is $0.10, not $0.1 — while keeping the precision the
+ * catalog states, so $0.015/1K vectors does not round away to a cent.
+ */
+export function formatUsageRate(v: number): string {
+  if (v >= 1) return `$${v.toLocaleString("en-US")}`;
+  const decimals = (String(v).split(".")[1] ?? "").length;
+  return `$${v.toFixed(Math.max(2, decimals))}`;
+}
