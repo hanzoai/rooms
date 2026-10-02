@@ -1,5 +1,3 @@
-'use client'
-
 /**
  * A lab's brand mark, or one of ours, painted in the current text colour.
  *
@@ -25,9 +23,7 @@
  * substitute for a logo that exists: of the labs on the endpoint today, only the
  * community fine-tuners and a handful of new labs reach it.
  */
-// A client boundary of its own, with one export: a server page that draws a
-// mark loads this module, not the whole @hanzo/ui barrel behind it.
-import { Text, View } from '@hanzo/ui'
+import { Text, View } from './ui'
 import { getOrgAndSlug, orgDisplayName } from './lib/models'
 import { ENSO_MARK, MARK_PATHS } from '@hanzo/logo/logos'
 import {
