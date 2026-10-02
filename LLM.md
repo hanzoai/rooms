@@ -1,83 +1,86 @@
 # @hanzo/rooms
 
 The workspace rooms — Home, Chat, Inbox, Contacts, Meet, Cal, Drive, Board,
-Work, Bots, Guide, Settings and the frame that holds them (Room, Shell, Orgs) —
-once, for every surface. hanzo.ai and hanzo.team import them; neither keeps a
-copy.
+Work, Bots, Guide, Settings — and the frame that holds them (Room, Shell,
+Orgs), once, for every surface. hanzo.ai and hanzo.team import them; neither
+keeps a copy. Repo `github.com/hanzoai/rooms`, npm `@hanzo/rooms`.
 
-## Why its own package
+## Why its own package and its own repo
 
 `@hanzo/ui` is presentational: data in, events out, no fetch. The rooms are
-connected — they hold an IAM session, an `@hanzo/ai` client, billing and plan
-reads — and they bring `@hanzo/ai`, `@hanzo/voice`, `@hanzo/build`,
-`@hanzo/usage`, `@hanzo/personas` and `marked`. On `@hanzo/ui` those would be
-peers of every app that only wants a Button. Beside it, in this monorepo, they
-share the gui train, the catalog and the publish lane, the way `@hanzo/composer`
-and `@hanzo/appearance` do. `@hanzo/build` (hanzoai/build) is the same shape for
-the builder.
-
-Peers: `@hanzo/ui`, `@hanzo/gui`, `@hanzo/appearance`, `@hanzo/ai`,
-`@hanzo/iam`, `@hanzo/plans`, `@hanzo/usage`, `@hanzo/voice`, `@hanzo/build`,
-`@hanzogui/lucide-icons-2`, `react`. No `next`, no `next-themes`.
+connected — an IAM session, an `@hanzo/ai` client, billing and plan reads — and
+bring `@hanzo/ai`, `@hanzo/voice`, `@hanzo/build`, `@hanzo/usage` and
+`@hanzo/personas`. They sit beside `@hanzo/ui` the way `@hanzo/build` does
+(`hanzoai/build`), in a repo of their own: the `hanzoai/ui` workspace re-resolves
+its whole peer graph on any lockfile change, and a re-resolve there turns 21
+latent type errors in `pkg/ui` on, so a new package inside it could not land
+without breaking the ui release.
 
 ## What a host passes
 
-One provider, configured once at the layout. Everything else the rooms used to
-reach into the app for moves INTO this package, because both apps carried a copy
-of it: the IAM session reader (`bearer`, `scope`, `org`, `orgs`, `pick`,
-`superAdmin`, `assumed`, `support`), `useAi`, `useTier`/`useLimits`/
-`useSubscription`, plan reads, invitations, shares, coding runs, durable/todo,
-`mix`, `useHydrated`, the persona strings.
+Two halves, because two kinds of caller read them.
+
+```ts
+// Once, at module scope, in a module the host's root imports (pure: where.ts).
+import { configure } from '@hanzo/rooms'
+configure({ site: '', home: '/home', signUp: '/signup', api, iam, key })
+configure({ plans, integrations })       // only where the rooms draw — heavy
+```
 
 ```tsx
-import { Rooms, Room } from '@hanzo/rooms'
-
-<Rooms
-  api="https://api.hanzo.ai"          // gateway origin; every /v1 call
-  iam="https://hanzo.id"              // IAM origin; the session's issuer
-  brand={hanzo}                       // @hanzo/brand: name, mark, hosts
-  routes={routes}                     // where things live on THIS host
-  navigate={navigate}                 // { push, replace, back, forward }
-  Link={Link}                         // next/link, or an <a> on Vite/Tauri
-  search={useSearchParams()}          // the address's query
-  track={track}                       // analytics sink, (event, props) => void
-  slots={{ ProviderMark, Landing, Gate, Signup }}
->
-  <Room mode="cal" />
+// Where the rooms render (client: host.tsx).
+<Rooms router={useRouter()} search={useSearchParams()} route={route} Link={NextLink}>
+  <Room mode="cal"><CalScheduler /></Room>
 </Rooms>
 ```
 
-- `routes` is the only thing that differs between the two sites today:
-  `home` (`/home` on hanzo.ai, `/` on hanzo.team), `signIn`/`signUp` (`/login`,
-  `/signup` vs `/start`), `site(path)` (relative on hanzo.ai, absolute
-  `https://hanzo.ai/...` on hanzo.team), `dev(ref)`, `chat(id)`, `pay(...)`,
-  `invite`.
-- `navigate` + `Link` + `search` replace `next/navigation` and `next/link`.
-  `Room` is already the only router binding; `Workspace` already takes
-  `navigate`/`back`/`forward`.
-- The session is read through `@hanzo/iam/react`; the host mounts
-  `IamProvider` as it does now. No session object is passed.
-- Theme and accent come from `@hanzo/appearance` (`useScheme`, `useAppearance`);
-  the rooms import no theme library. The theme row in Settings is the
-  Appearance panel's.
-- `slots` are the host's own: `ProviderMark` (pulls simple-icons and logo
-  data), `Landing`, `Gate` and `Signup` (hanzo.team's front door), the
-  integrations list.
-- Colour: one accent (`$accentBackground` / `var(--primary)` family), neutral
-  tags (`$panel`/`$edge`, `$ink`/`$soft`), status-only hue (`$bad`, `$good`).
-  No literal colour in a room; a data hue (an avatar tint, a brand logo) is
-  content and says so.
+| address | hanzo.ai | hanzo.team |
+|---|---|---|
+| `site` — where the app's pages live (`/dev`, `/legal/*`, `/pricing`) | `''` | `https://hanzo.ai` |
+| `home` — the rooms' Home | `/home` | `/` |
+| `signUp` | `/signup` | `/start` |
+| `Landing`, `Signup` — the front door of a workspace rooted at `/` | — | team's components |
+| `plans`, `integrations` — first-paint catalogue, Directory's apps | build data | build data |
 
-## Moving the rooms (phase B)
+- Plain modules read addresses through `where()` / `site()` and must import
+  them from `./where`, never `./host`: `host.tsx` is `'use client'`, and a
+  server component calling a client module's export throws ("Attempted to call
+  site() from the server").
+- A module-level constant must not capture an address: `configure()` may run
+  after the module evaluates. Read at call time (`get route()`, `invite()`,
+  `dev()`, `signUp()`).
+- The session is IAM's (`@hanzo/iam/react`; the host mounts `IamProvider`).
+- The look is `@hanzo/appearance`'s: `<Rooms>` applies the person's layers for
+  the org in scope and syncs them with IAM (`useLook`); the Settings panel is the
+  Appearance panel, theme row included. No theme library is imported.
+- Navigation to another origin (`site()` on hanzo.team) is a document load in
+  `Room`; same-origin routes go through the host's router.
 
-1. hanzo.ai `components/workspace/*` is the source of truth. Port what only
-   hanzo.team has: the Orgs front door (`front`/`forward`/`signup`, `Start`
-   naming + invites, the per-seat `Plan` screen, `Forward`), `Room front`,
-   `open.ts` project state, and Account's balance block where the room still
-   wants it.
-2. Each `@/…` import becomes a package module or a `Rooms` prop, per the list
-   above. `team.ts` persona markdown is turned into strings at build time.
-3. Both apps mount `<Rooms>` in `app/(app)/layout.tsx`, routes render
-   `<Room mode=…>`, and `components/workspace/*` is deleted in both.
-4. Gates: `pnpm --filter @hanzo/rooms... build`, `tsc --noEmit`, vitest, and
-   `hanzo-design-lint` on the package; each app's typecheck, lint:design, gates.
+## Layout
+
+- `src/*.tsx` — the rooms, as `components/workspace/*` was in hanzo.ai; each is
+  a subpath (`@hanzo/rooms/CalScheduler`).
+- `src/bots/*` — the Bots room.
+- `src/lib/*` — the workspace's infrastructure, one copy for every host:
+  `session`, `destination`, `api`, `ai` (useAi), `account`, `tier`, `limits`,
+  `plans`, `share`, `coding`, `todo`, `durable`, `tags`, `host` (estate routing),
+  `mix`, `hydrated` … Apps import these from the package
+  (`@hanzo/rooms/lib/session`) and keep no copy.
+- `src/team.gen.ts` — the core team's persona files as strings, generated from
+  `@hanzo/personas` by `scripts/team.mjs`, so no host needs an asset loader.
+
+## Build and ship
+
+`pnpm build` = team strings → `tsc` → `scripts/specifiers.mjs` (every relative
+import fully specified, so Node's ESM loader resolves dist outside a bundler).
+Gates: `pnpm typecheck`, `pnpm lint:design` (ratchet in
+`hanzo-design.allow.json`), `pnpm build`. Publish: bump `version`, push main;
+`.github/workflows/publish.yml` publishes what npm does not serve.
+
+## What each app still owns
+
+hanzo.ai: its marketing site, the app at `/` (`_web.tsx`), the integrations and
+plan data, `lib/models` (the catalogue; naming comes from `@hanzo/rooms/lib/models`).
+hanzo.team: its landing, sign-up, sign-in gate, the `/agents` page, and its own
+`lib/host` (BRAND, BOOKING), `lib/auth/client` (its sign-in flow) and
+`lib/analytics/tags` (its GA4/Pixel boot).
