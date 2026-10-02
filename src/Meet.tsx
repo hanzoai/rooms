@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   Video,
   VideoOff,
@@ -23,10 +23,14 @@ import {
 } from 'lucide-react'
 import { Text, View, XStack, YStack } from '@hanzo/gui'
 import { Button } from '@hanzo/ui'
+import { useIamToken } from '@hanzo/iam/react'
+import { REFUSED, speech, useVoice } from '@hanzo/voice'
 import { Face, voiceOf } from './cast'
 import { member } from './team'
-import { speakAgent, stopAgentSpeech, AudioWave, useAgentSpeech } from './speech'
+import { cleanForSpeech, speakAgent, stopAgentSpeech, AudioWave, useAgentSpeech } from './speech'
 import { GOOD } from './lib/mix'
+import { api } from './lib/api'
+import { ENSO, base } from './lib/ai'
 
 export interface MeetingAgent {
   id: string
@@ -42,14 +46,14 @@ const seated = (id: string): MeetingAgent => {
 }
 
 export const AVAILABLE_MEETING_AGENTS: MeetingAgent[] = [
-  { id: 'hanzo-coder', name: 'Hanzo Coder', role: 'Engineering Lead & Coder', voice: 'ash' },
-  { id: 'hanzo-researcher', name: 'Hanzo Researcher', role: 'Research & DeSci Scientist', voice: 'fable' },
+  { id: 'hanzo-coder', name: 'Hanzo Coder', role: 'Engineering Lead & Coder', voice: voiceOf('Hanzo Coder') },
+  { id: 'hanzo-researcher', name: 'Hanzo Researcher', role: 'Research & DeSci Scientist', voice: voiceOf('Hanzo Researcher') },
   seated('maya'),
   seated('des'),
   seated('vi'),
   seated('nora'),
   seated('einstein'),
-  { id: 'zach', name: 'Zach', role: 'Quantitative Analyst', voice: 'onyx' },
+  { id: 'zach', name: 'Zach', role: 'Quantitative Analyst', voice: voiceOf('zach') },
 ]
 
 interface ScheduledMeeting {
@@ -108,70 +112,34 @@ const DEFAULT_MEETINGS: ScheduledMeeting[] = [
   },
 ]
 
-async function generateAgentMeetingResponse(prompt: string, agentName: string): Promise<string> {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('hanzo_iam_access_token') : null
-  if (token) {
-    try {
-      const res = await fetch('https://api.hanzo.ai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+/**
+ * The co-pilot's answer to one thing said in the call, in a sentence or two a
+ * voice can read. Asked of the gateway as the reader (`token`, from
+ * `useIamToken`) through the one API host; a refusal is thrown with what the
+ * gateway said, never answered with a line nobody wrote.
+ */
+async function generateAgentMeetingResponse(prompt: string, agentName: string, token: string | null): Promise<string> {
+  if (!token) throw new Error('Sign in to ask the co-pilot.')
+  const res = await fetch(`${api()}/v1/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      model: ENSO,
+      messages: [
+        {
+          role: 'system',
+          content: `You are ${agentName}, participating in a live Hanzo Meet video call. Respond succinctly, conversationally, and informatively in 1 to 2 sentences suitable for voice synthesis.`,
         },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            {
-              role: 'system',
-              content: `You are ${agentName}, participating in a live Hanzo Meet video call. Respond succinctly, conversationally, and informatively in 1 to 2 sentences suitable for voice synthesis.`,
-            },
-            {
-              role: 'user',
-              content: prompt,
-            },
-          ],
-          max_tokens: 150,
-        }),
-      })
-      if (res.ok) {
-        const data = await res.json()
-        const text = data.choices?.[0]?.message?.content?.trim()
-        if (text) return text
-      }
-    } catch {}
-  }
-
-  // Domain-specific intelligent persona responses
-  const lower = prompt.toLowerCase()
-  const agent = agentName.toLowerCase()
-
-  if (agent.includes('coder')) {
-    if (lower.includes('audio') || lower.includes('webrtc') || lower.includes('media')) {
-      return 'The WebRTC audio track is streaming over LiveKit SFU at 24kHz with PCM capture and real-time turn-taking.'
-    }
-    if (lower.includes('deploy') || lower.includes('build') || lower.includes('status')) {
-      return 'All services and container builds are verified green across Kubernetes pods with zero regressions.'
-    }
-    return `As Hanzo Coder, I am tracking that: our engineering pipeline is synchronized and ready for production deployment.`
-  }
-
-  if (agent.includes('researcher')) {
-    return `From our DeSci research benchmarks, model convergence and validation loss show optimal scaling across the cluster.`
-  }
-
-  if (agent.includes('maya')) {
-    return `I have recorded this decision and scheduled the follow-up milestone in our calendar.`
-  }
-
-  if (agent.includes('des')) {
-    return `The UI hierarchy, contrast ratios, and layout flow are optimized for clarity across both desktop and mobile.`
-  }
-
-  if (agent.includes('vi')) {
-    return `Cluster health, P99 response latencies, and auto-scaling ingress controllers are reporting 100% operational.`
-  }
-
-  return `Understood. I have logged that item for our meeting sync and will monitor the execution.`
+        { role: 'user', content: prompt },
+      ],
+      max_tokens: 150,
+    }),
+  })
+  if (!res.ok) throw new Error(`The co-pilot is unavailable (${res.status}).`)
+  const data = await res.json()
+  const text = data.choices?.[0]?.message?.content?.trim()
+  if (!text) throw new Error('The co-pilot answered with nothing.')
+  return text
 }
 
 /** design's smallest rung (`--text-floor`, 10px), below gui's `$1`; gui's font size takes a rung or a number. */
@@ -196,17 +164,12 @@ export function Meet() {
   const [agentQuestion, setAgentQuestion] = useState('')
 
   // Agent Speech in Call
+  const { token } = useIamToken()
   const { speaking, speak, toggle } = useAgentSpeech(activeCoPilotAgent)
   const [audioTesting, setAudioTesting] = useState(false)
-  const [handsFree, setHandsFree] = useState(false)
-  const recognitionRef = useRef<any>(null)
 
-  const [liveNotes, setLiveNotes] = useState<string[]>([
-    '18:02: Meeting started with participants. AI Bot transcription active.',
-    '18:04: Discussed latency metrics on local S3 drive server (port 9005). Average response: 1.2ms.',
-    '18:08: Agreed on channel connector architecture: channels connect via bot instances exclusively.',
-    '18:12: Action Item assigned to Hanzo Coder: Integrate Cal.com scheduling engine across bot triggers.',
-  ])
+  // The call's notes: what was said and answered here, and nothing before it.
+  const [liveNotes, setLiveNotes] = useState<string[]>([])
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const localStreamRef = useRef<MediaStream | null>(null)
@@ -293,90 +256,43 @@ export function Meet() {
     }
     setAudioTesting(true)
     speakAgent(
-      `Welcome to Hanzo Meet. Speaker test complete. All agent audio and video systems are ready for this call.`,
+      `Welcome to Hanzo Meet. This is ${activeCoPilotAgent}'s voice. If you can hear this, your speakers are working.`,
       {
         agent: activeCoPilotAgent,
+        token,
         onEnd: () => setAudioTesting(false),
         onError: () => setAudioTesting(false),
       },
     )
   }
 
+  // HANDS-FREE is one spoken conversation with the co-pilot, on @hanzo/voice:
+  // the mic records, each pause goes to Hanzo's /v1/audio/transcriptions, the
+  // utterance is answered, and the answer is read in the co-pilot's cast voice
+  // by /v1/audio/speech. Speaking over the reply stops it (the machine's
+  // barge-in). Every browser that can record takes part, not only the ones with
+  // a working SpeechRecognition — Chromium on Linux and Firefox have none.
+  const ear = useMemo(() => speech({ ...base(), ...(token ? { token } : {}) }), [token])
+  const handsFree = useVoice({
+    speech: ear,
+    onUtterance: (transcript) => void handleSpokenInput(transcript),
+  })
+  const handsFreeSay = handsFree.say
+
   const handleSpokenInput = useCallback(
     async (transcript: string) => {
       const time = new Date().toLocaleTimeString().slice(0, 5)
-      const userNote = `${time}: You (voice): ${transcript}`
-      setLiveNotes((prev) => [...prev, userNote])
-
-      const reply = await generateAgentMeetingResponse(transcript, activeCoPilotAgent)
-      const agentNote = `${time}: ${activeCoPilotAgent} (AI): ${reply}`
-      setLiveNotes((prev) => [...prev, agentNote])
-      speak(reply, activeCoPilotAgent)
+      setLiveNotes((prev) => [...prev, `${time}: You (voice): ${transcript}`])
+      try {
+        const reply = await generateAgentMeetingResponse(transcript, activeCoPilotAgent, token)
+        setLiveNotes((prev) => [...prev, `${time}: ${activeCoPilotAgent} (AI): ${reply}`])
+        void handsFreeSay(cleanForSpeech(reply), voiceOf(activeCoPilotAgent))
+      } catch (err) {
+        setLiveNotes((prev) => [...prev, `${time}: ${activeCoPilotAgent} did not answer: ${(err as Error).message}`])
+      }
     },
-    [activeCoPilotAgent, speak],
+    [activeCoPilotAgent, token, handsFreeSay],
   )
-
-  // Real-time hands-free speech recognition & barge-in turn-taking
-  useEffect(() => {
-    if (!handsFree || !activeMeetingRoom) {
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.stop()
-        } catch {}
-        recognitionRef.current = null
-      }
-      return
-    }
-
-    if (typeof window === 'undefined') return
-
-    const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-    if (!SpeechRec) return
-
-    const recognition = new SpeechRec()
-    recognition.continuous = true
-    recognition.interimResults = true
-    recognition.lang = 'en-US'
-
-    recognition.onresult = (event: any) => {
-      // Barge-in: if human starts speaking while agent is talking, halt speech immediately!
-      if (speaking) {
-        stopAgentSpeech()
-      }
-
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        if (event.results[i].isFinal) {
-          const transcript = event.results[i][0]?.transcript?.trim()
-          if (transcript) {
-            handleSpokenInput(transcript)
-          }
-        }
-      }
-    }
-
-    recognition.onerror = () => {}
-    recognition.onend = () => {
-      if (handsFree && activeMeetingRoom) {
-        try {
-          recognition.start()
-        } catch {}
-      }
-    }
-
-    try {
-      recognition.start()
-      recognitionRef.current = recognition
-    } catch {}
-
-    return () => {
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.stop()
-        } catch {}
-        recognitionRef.current = null
-      }
-    }
-  }, [handsFree, activeMeetingRoom, speaking, handleSpokenInput])
 
   const handleAskAgent = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -384,20 +300,25 @@ export function Meet() {
     if (!q) return
     setAgentQuestion('')
     const time = new Date().toLocaleTimeString().slice(0, 5)
-    const userNote = `${time}: You: ${q}`
-    setLiveNotes((prev) => [...prev, userNote])
-
-    const reply = await generateAgentMeetingResponse(q, activeCoPilotAgent)
-    const agentNote = `${time}: ${activeCoPilotAgent} (AI): ${reply}`
-
-    setLiveNotes((prev) => [...prev, agentNote])
-    speak(reply, activeCoPilotAgent)
+    setLiveNotes((prev) => [...prev, `${time}: You: ${q}`])
+    try {
+      const reply = await generateAgentMeetingResponse(q, activeCoPilotAgent, token)
+      setLiveNotes((prev) => [...prev, `${time}: ${activeCoPilotAgent} (AI): ${reply}`])
+      speak(reply, activeCoPilotAgent)
+    } catch (err) {
+      setLiveNotes((prev) => [...prev, `${time}: ${activeCoPilotAgent} did not answer: ${(err as Error).message}`])
+    }
   }
 
+  // The briefing is the call's own notes, read aloud; with none there is nothing to brief.
   const handleReadBriefing = () => {
-    const summary = `Executive briefing for ${activeMeetingRoom || 'call'}. Key items discussed: latency metrics on local S3 drive server average 1.2ms, channel connector architecture verified, Cal scheduling integration underway.`
-    toggle(summary, activeCoPilotAgent)
+    if (!liveNotes.length) return
+    toggle(`Briefing for ${activeMeetingRoom || 'this call'}. ${liveNotes.join('. ')}`, activeCoPilotAgent)
   }
+
+  // What the hands-free control says: why it cannot run, or that Hanzo's speech
+  // refused and the browser stood in (or could not) — never silence.
+  const handsFreeNote = handsFree.reason ?? (handsFree.refusal ? REFUSED[handsFree.refusal.covered ? 'covered' : 'lost'] : null)
 
   return (
     <YStack width="100%" height="100%" bg="$background" overflowX="auto" overflowY="auto">
@@ -488,6 +409,8 @@ export function Meet() {
               variant="destructive"
               onClick={() => {
                 stopAgentSpeech()
+                // Leaving the call hangs up the hands-free conversation with it.
+                if (handsFree.open) handsFree.toggle()
                 setActiveMeetingRoom(null)
               }}
             >
@@ -579,7 +502,8 @@ export function Meet() {
                 {/* AI Agents Tiles */}
                 {invitedAgents.map((agentName) => {
                   const voice = voiceOf(agentName)
-                  const isThisSpeaking = speaking && activeCoPilotAgent.toLowerCase() === agentName.toLowerCase()
+                  const isThisSpeaking =
+                    (speaking || handsFree.state === 'speaking') && activeCoPilotAgent.toLowerCase() === agentName.toLowerCase()
 
                   return (
                     <YStack
@@ -720,7 +644,13 @@ export function Meet() {
 
               {/* Voice Actions: Briefing & Hands-Free Mode */}
               <XStack gap={8}>
-                <Button size="sm" flex={1} variant={speaking ? 'secondary' : 'default'} onClick={handleReadBriefing}>
+                <Button
+                  size="sm"
+                  flex={1}
+                  variant={speaking ? 'secondary' : 'default'}
+                  disabled={!speaking && !liveNotes.length}
+                  onClick={handleReadBriefing}
+                >
                   {speaking ? (
                     <>
                       <AudioWave active={true} color="var(--state-success)" />
@@ -737,16 +667,27 @@ export function Meet() {
 
                 <Button
                   size="sm"
-                  variant={handsFree ? 'secondary' : 'default'}
+                  variant={handsFree.open ? 'secondary' : 'default'}
                   data-testid="hands-free-voice-toggle"
-                  aria-pressed={handsFree}
-                  title={handsFree ? 'Hands-Free Voice Active (Speaks and interrupts on voice)' : 'Enable Hands-Free Voice Mode'}
-                  onClick={() => setHandsFree(!handsFree)}
+                  data-state={handsFree.state}
+                  data-refusal={handsFree.refusal ? handsFree.refusal.service : undefined}
+                  aria-pressed={handsFree.open}
+                  disabled={!!handsFree.blocked}
+                  title={
+                    handsFreeNote ??
+                    (handsFree.open ? 'Hands-Free Voice Active (Speaks and interrupts on voice)' : 'Enable Hands-Free Voice Mode')
+                  }
+                  onClick={handsFree.toggle}
                 >
-                  <Mic size={14} color={handsFree ? 'var(--state-success)' : 'currentColor'} />
-                  {handsFree ? 'Hands-Free On' : 'Hands-Free'}
+                  <Mic size={14} color={handsFree.open ? 'var(--state-success)' : 'currentColor'} />
+                  {handsFree.open ? 'Hands-Free On' : 'Hands-Free'}
                 </Button>
               </XStack>
+              {handsFreeNote ? (
+                <Text fontSize="$1" color="$soft" role="status">
+                  {handsFreeNote}
+                </Text>
+              ) : null}
 
               {/* Real-time Notes Stream */}
               <YStack
@@ -806,9 +747,13 @@ export function Meet() {
                 <Button
                   size="sm"
                   flex={1}
+                  disabled={!agentQuestion.trim()}
+                  title="Add what is typed above to the notes, without asking the co-pilot"
                   onClick={() => {
-                    const sample = `${new Date().toLocaleTimeString().slice(0, 5)}: Participant discussed deployment timeline for next release.`
-                    setLiveNotes((prev) => [...prev, sample])
+                    const note = agentQuestion.trim()
+                    if (!note) return
+                    setAgentQuestion('')
+                    setLiveNotes((prev) => [...prev, `${new Date().toLocaleTimeString().slice(0, 5)}: You (note): ${note}`])
                   }}
                 >
                   + Add Live Note
