@@ -238,10 +238,10 @@ export function showSettings(pane: string | null): void {
   set({ ...selection, settings: pane })
 }
 
-/** Empties the room: no thread, and a fresh count so the pane hears it even
- *  when there was no thread to leave. */
+/** Empties the room: no thread, nobody seated, and a fresh count so the pane
+ *  hears it even when there was nothing to leave. "New chat" is this. */
 export function empty(): void {
-  set({ ...selection, thread: null, emptied: selection.emptied + 1 })
+  set({ ...selection, thread: null, agents: [], emptied: selection.emptied + 1 })
 }
 
 export function useOpen(): Open {
