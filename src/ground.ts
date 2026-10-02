@@ -2,8 +2,10 @@
  * The ground the workspace's cards stand on, and how each card is cut.
  *
  * A PANE is a card floating on the ground, cut by the `--pane-*` tokens
- * (app/globals.css): a corner, an edge, the lens behind it, and the second
- * paper rung's lit edge and drop. The fill is the caller's rung: `--pane-fill`
+ * (@hanzo/design elevation.css): a corner, an edge, the lens behind it, and the
+ * first paper rung's lit edge and drop — the second's 15px drop and the floor's
+ * strong glass read as a gradient through a translucent pane, so both stay one
+ * rung down. The fill is the caller's rung: `--pane-fill`
  * in the app's frame, `sheet(1)`/`sheet(2)` where a pane lies in a room.
  *
  * The drop is a prop and not `sheet(2)`'s `elevation-2` class, whose shadow is
@@ -17,7 +19,7 @@ export const pane = (fill = 'var(--pane-fill)') =>
     borderWidth: 1,
     borderColor: 'var(--pane-edge)',
     backdropFilter: 'var(--pane-blur)',
-    boxShadow: 'var(--shadow-sheet-2)',
+    boxShadow: 'var(--shadow-sheet-1)',
   }) as const
 
 /**
@@ -28,7 +30,7 @@ export const pane = (fill = 'var(--pane-fill)') =>
  */
 export const floor = {
   backgroundColor: 'var(--pane-floor)',
-  backgroundImage: 'linear-gradient(to bottom, var(--glass-strong), transparent), var(--pane-ground)',
+  backgroundImage: 'linear-gradient(to bottom, var(--glass), transparent), var(--pane-ground)',
   backgroundSize: '100% 70%, auto',
   backgroundRepeat: 'no-repeat',
 } as const
