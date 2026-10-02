@@ -1,11 +1,15 @@
 'use client'
 
-// Agent Speech & Voice Synthesis
+// Agent Speech
 //
 // Every agent in the Hanzo ecosystem has an assigned voice (`voiceOf(name)` from
-// `cast.tsx`). This module provides speech synthesis for agents across Chat,
-// Talk channels, and Meet video calls:
-// - Direct browser SpeechSynthesis with agent-tailored pitch, rate, and voice matching
+// `cast.tsx`), and the platform reads it: `/v1/audio/speech` through
+// @hanzo/voice's `speech()` transport and `mouth()`, in that voice. The
+// browser's own speechSynthesis reads only when the platform refuses, in a
+// voice of the same register and accent, and the refusal is reported rather
+// than passed off as the platform's voice.
+//
+// - The Listen button on a message, the Meet speaker test and its briefing
 // - Audio wave visualization during playback
 // - Clean cancellation and state management
 // - Text normalization (strips code fences, markdown syntax so speech sounds natural)
@@ -14,8 +18,11 @@ import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { Volume2, Square } from 'lucide-react'
 import { View, XStack } from '@hanzo/gui'
 import { Button } from '@hanzo/ui'
+import { useIamToken } from '@hanzo/iam/react'
+import { mouth, speech, REFUSED, type Mouth, type Refusal } from '@hanzo/voice'
 import { GOOD } from './lib/mix'
-import { voiceOf, voiceProfileOf } from './cast'
+import { base } from './lib/ai'
+import { voiceOf, voiceProfileOf, type VoiceProfile } from './cast'
 
 /** Strips code blocks, links, headers, and markdown markup for natural audio speech. */
 export function cleanForSpeech(raw: string): string {
@@ -43,32 +50,59 @@ export function cleanForSpeech(raw: string): string {
     .trim()
 }
 
-/** Currently active speech synthesis utterance tracker. */
-let activeUtterance: SpeechSynthesisUtterance | null = null
+/** Browser voice names by register, for the stand-in. Word-bounded: "Female" holds "male". */
+const REGISTER: Record<VoiceProfile['gender'], RegExp> = {
+  female: /\b(female|samantha|victoria|karen|zira|serena|moira|tessa)\b/i,
+  male: /\b(male|daniel|alex|fred|david|arthur|oliver)\b/i,
+}
+
+/**
+ * The browser voice that reads when the platform refuses: English, the cast
+ * voice's accent where this browser has it, its register where a name says so.
+ * Read per sentence, because the browser loads its voice list asynchronously.
+ */
+export function standIn({ gender, accent }: VoiceProfile, voices: { name: string; lang: string }[]): string | undefined {
+  const english = voices.filter((v) => v.lang.toLowerCase().startsWith('en'))
+  const local = english.filter((v) => v.lang.toLowerCase().replace('_', '-') === (accent === 'british' ? 'en-gb' : 'en-us'))
+  const pick = (list: { name: string }[]) => list.find((v) => REGISTER[gender].test(v.name))
+  return (pick(local) ?? pick(english) ?? local[0] ?? english[0] ?? voices[0])?.name
+}
+
+/** The reply being read aloud on this page. One at a time: a new one stops the last. */
+let active: Mouth | null = null
 const activeListeners: Set<() => void> = new Set()
 
+const notify = () => {
+  for (const listener of activeListeners) listener()
+}
+
 export function stopAgentSpeech(): void {
-  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-    try {
-      window.speechSynthesis.cancel()
-    } catch {}
-  }
-  activeUtterance = null
-  for (const notify of activeListeners) {
-    notify()
-  }
+  const lips = active
+  active = null
+  lips?.hush()
+  notify()
 }
 
 export interface SpeakOptions {
   agent?: string
+  /** The reader's IAM bearer (`useIamToken`). Without one the platform refuses
+   *  and the browser reads, which is reported through `onRefusal`. */
+  token?: string | null
+  /** Speaking began. Fires at once: the request for the audio is part of it. */
   onStart?: () => void
+  /** Speaking stopped, for any reason: played out, stopped, or replaced. */
   onEnd?: () => void
   onError?: (err: unknown) => void
+  /** The platform refused, and whether the browser stood in. */
+  onRefusal?: (refusal: Refusal) => void
 }
 
 /**
- * Speak text in the assigned voice of an agent.
+ * Speak text in the assigned voice of an agent, through the platform.
  * Returns a cancel function.
+ *
+ * Call it from the click that asks for it: the player is made inside that
+ * gesture, which is what lets Safari play the reply when it arrives.
  */
 export function speakAgent(text: string, options: SpeakOptions = {}): () => void {
   if (typeof window === 'undefined') return () => {}
@@ -78,73 +112,30 @@ export function speakAgent(text: string, options: SpeakOptions = {}): () => void
   const clean = cleanForSpeech(text)
   if (!clean) return () => {}
 
-  if (!('speechSynthesis' in window)) {
-    options.onError?.(new Error('SpeechSynthesis not supported in this browser'))
-    return () => {}
-  }
-
   const profile = voiceProfileOf(options.agent)
-  const utterance = new SpeechSynthesisUtterance(clean)
-  utterance.pitch = profile.pitch
-  utterance.rate = profile.rate
+  const lips = mouth({
+    speech: speech({ ...base(), ...(options.token ? { token: options.token } : {}) }),
+    voice: () => standIn(profile, window.speechSynthesis?.getVoices() ?? []),
+    refused: options.onRefusal,
+  })
+  active = lips
+  options.onStart?.()
 
-  // Attempt to select best matching system voice based on gender / voice tone
-  try {
-    const voices = window.speechSynthesis.getVoices()
-    if (voices.length > 0) {
-      const isFemale = profile.gender === 'female'
-      const candidate = voices.find((v) => {
-        const name = v.name.toLowerCase()
-        const lang = v.lang.toLowerCase()
-        if (!lang.startsWith('en')) return false
-        if (isFemale) {
-          return name.includes('female') || name.includes('samantha') || name.includes('victoria') || name.includes('karen') || name.includes('zira')
-        } else {
-          return name.includes('male') || name.includes('daniel') || name.includes('alex') || name.includes('fred') || name.includes('david')
-        }
-      }) || voices.find((v) => v.lang.toLowerCase().startsWith('en')) || voices[0]
-
-      if (candidate) {
-        utterance.voice = candidate
-      }
-    }
-  } catch {}
-
-  utterance.onstart = () => {
-    activeUtterance = utterance
-    options.onStart?.()
-  }
-
-  utterance.onend = () => {
-    if (activeUtterance === utterance) {
-      activeUtterance = null
-    }
-    options.onEnd?.()
-    for (const notify of activeListeners) {
+  lips.say(clean, profile.voice).then(
+    () => {
+      if (active === lips) active = null
+      options.onEnd?.()
       notify()
-    }
-  }
-
-  utterance.onerror = (e) => {
-    if (activeUtterance === utterance) {
-      activeUtterance = null
-    }
-    options.onError?.(e)
-    for (const notify of activeListeners) {
+    },
+    (err: unknown) => {
+      if (active === lips) active = null
+      options.onError?.(err)
       notify()
-    }
-  }
-
-  try {
-    window.speechSynthesis.speak(utterance)
-  } catch (err) {
-    options.onError?.(err)
-  }
+    },
+  )
 
   return () => {
-    if (activeUtterance === utterance) {
-      stopAgentSpeech()
-    }
+    if (active === lips) stopAgentSpeech()
   }
 }
 
@@ -152,8 +143,10 @@ export function speakAgent(text: string, options: SpeakOptions = {}): () => void
  * Hook for managing agent speech playback in UI components.
  */
 export function useAgentSpeech(defaultAgent?: string) {
+  const { token } = useIamToken()
   const [speaking, setSpeaking] = useState(false)
   const [currentText, setCurrentText] = useState<string | null>(null)
+  const [refusal, setRefusal] = useState<Refusal | null>(null)
   const cancelRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
@@ -179,8 +172,10 @@ export function useAgentSpeech(defaultAgent?: string) {
       stop()
       setCurrentText(text)
       setSpeaking(true)
+      setRefusal(null)
       cancelRef.current = speakAgent(text, {
         agent: agentName || defaultAgent,
+        token,
         onStart: () => setSpeaking(true),
         onEnd: () => {
           setSpeaking(false)
@@ -190,9 +185,10 @@ export function useAgentSpeech(defaultAgent?: string) {
           setSpeaking(false)
           setCurrentText(null)
         },
+        onRefusal: setRefusal,
       })
     },
-    [defaultAgent, stop],
+    [defaultAgent, stop, token],
   )
 
   const toggle = useCallback(
@@ -206,7 +202,7 @@ export function useAgentSpeech(defaultAgent?: string) {
     [speaking, currentText, speak, stop],
   )
 
-  return { speaking, currentText, speak, stop, toggle }
+  return { speaking, currentText, refusal, speak, stop, toggle }
 }
 
 /** The five bars' resting heights, as a share of the 12px the wave stands in. */
@@ -273,8 +269,11 @@ export function SpeakButton({
   agentName?: string
   compact?: boolean
 }) {
-  const { speaking, toggle } = useAgentSpeech(agentName)
+  const { speaking, refusal, toggle } = useAgentSpeech(agentName)
   const voice = voiceOf(agentName)
+  // A browser voice standing in for a refused platform sounds like success;
+  // the label is the one place that says otherwise.
+  const stood = refusal ? ` ${REFUSED[refusal.covered ? 'covered' : 'lost']}` : ''
 
   // An @hanzo/ui Button: ghost at rest, the quiet pressed ground while it
   // speaks. The word for speaking is the one status here, so it alone takes
@@ -286,9 +285,10 @@ export function SpeakButton({
       size={compact ? 'icon-sm' : 'sm'}
       color={speaking ? GOOD : '$soft'}
       onClick={() => toggle(text, agentName)}
-      aria-label={speaking ? 'Stop speaking' : `Listen to ${agentName || 'agent'} (${voice})`}
+      aria-label={(speaking ? 'Stop speaking' : `Listen to ${agentName || 'agent'} (${voice})`) + stood}
       aria-pressed={speaking}
-      title={speaking ? 'Stop speaking' : `Listen in ${agentName || 'agent'}'s voice (${voice})`}
+      data-refusal={refusal ? refusal.service : undefined}
+      title={(speaking ? 'Stop speaking' : `Listen in ${agentName || 'agent'}'s voice (${voice})`) + stood}
     >
       {speaking ? (
         <>

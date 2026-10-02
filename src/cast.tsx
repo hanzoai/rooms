@@ -42,18 +42,17 @@ interface Role {
    */
   ground?: string
   /**
-   * The voice the platform reads this character's replies in, by
-   * /v1/audio/speech name.
+   * The voice the platform reads this character's replies in: a speech-service
+   * voice id, sent to /v1/audio/speech as it is. The first letter is the accent
+   * (a American, b British), the second the register (f female, m male).
    *
-   * ONE VOICE PER CHARACTER, and never two who would be in the same room. The
-   * service serves eleven and there are fourteen of them, so three must double
-   * up — the question is which three, and the answer is people who work apart:
-   * the five the demo puts in one call are all distinct. `echo` was reading for
-   * three at once, which in a call is one person doing three parts.
+   * ONE VOICE PER CHARACTER, and never two who would be in the same room. A
+   * house part shares the voice of the character whose face it wears, so Hanzo
+   * Coder sounds like Dev; no two characters share one.
    *
    * CAST, NOT COPIED. These are the speech service's own voices, chosen for fit
-   * — a warm animated reader for the physicist, something low and dry for the
-   * founder. None of them is anybody's actual voice and none is trying to be:
+   * — a playful reader for the physicist, something low and measured for the
+   * quant. None of them is anybody's actual voice and none is trying to be:
    * synthesising a real person saying words they never said is a different act
    * from casting a part, and this is the second one.
    */
@@ -69,31 +68,31 @@ export const CAST: Record<string, Role> = {
   //
   // Dev wears its own memoji (black ground baked in, so it fills the disc and
   // needs no rim colour); hanzo coder is that same face under the house name.
-  dev: { portrait: '/agents/dev.png', voice: 'ash' },
-  des: { portrait: '/agents/des.png', ground: '#74569F', voice: 'echo' },
-  vi: { portrait: '/agents/vi.png', ground: '#41649F', voice: 'sage' },
-  antje: { portrait: '/agents/antje.jpg', voice: 'nova' },
-  zach: { portrait: '/agents/zach.jpg', voice: 'onyx' },
-  feynman: { portrait: '/agents/feynman.png', ground: '#9C7C4F', voice: 'fable' },
-  einstein: { portrait: '/agents/einstein.png', ground: '#7D6450', voice: 'verse' },
-  nora: { portrait: '/agents/nora.png', voice: 'shimmer' },
-  creative: { portrait: '/agents/creative.png', voice: 'ballad' },
-  maya: { portrait: '/agents/maya.png', voice: 'coral' },
-  leo: { portrait: '/agents/leo.png', voice: 'alloy' },
+  dev: { portrait: '/agents/dev.png', voice: 'am_michael' },
+  des: { portrait: '/agents/des.png', ground: '#74569F', voice: 'af_bella' },
+  vi: { portrait: '/agents/vi.png', ground: '#41649F', voice: 'am_fenrir' },
+  antje: { portrait: '/agents/antje.jpg', voice: 'af_nova' },
+  zach: { portrait: '/agents/zach.jpg', voice: 'am_onyx' },
+  feynman: { portrait: '/agents/feynman.png', ground: '#9C7C4F', voice: 'am_puck' },
+  einstein: { portrait: '/agents/einstein.png', ground: '#7D6450', voice: 'bm_george' },
+  nora: { portrait: '/agents/nora.png', voice: 'af_heart' },
+  creative: { portrait: '/agents/creative.png', voice: 'bm_fable' },
+  maya: { portrait: '/agents/maya.png', voice: 'bf_emma' },
+  leo: { portrait: '/agents/leo.png', voice: 'am_liam' },
 
   // THE HOUSE AGENTS, UNDER THE NAMES A READER SEES. Every entry above is keyed
   // by the character; these are keyed by the part.
-  'hanzo coder': { portrait: '/agents/dev.png', voice: 'ash' },
-  'hanzo researcher': { portrait: '/agents/feynman.png', voice: 'fable' },
-  'hanzo designer': { portrait: '/agents/des.png', voice: 'echo' },
-  'hanzo devops': { voice: 'sage' },
-  'hanzo quant': { voice: 'onyx' },
-  'hanzo copywriter': { portrait: '/agents/creative.png', voice: 'ballad' },
-  'hanzo legal & compliance': { portrait: '/agents/einstein.png', voice: 'verse' },
-  'hanzo executive assistant': { portrait: '/agents/maya.png', voice: 'coral' },
-  'hanzo architect': { voice: 'verse' },
-  'hanzo vision': { voice: 'ballad' },
-  'hanzo support': { portrait: '/agents/nora.png', voice: 'shimmer' },
+  'hanzo coder': { portrait: '/agents/dev.png', voice: 'am_michael' },
+  'hanzo researcher': { portrait: '/agents/feynman.png', voice: 'am_puck' },
+  'hanzo designer': { portrait: '/agents/des.png', voice: 'af_bella' },
+  'hanzo devops': { voice: 'am_fenrir' },
+  'hanzo quant': { voice: 'am_onyx' },
+  'hanzo copywriter': { portrait: '/agents/creative.png', voice: 'bm_fable' },
+  'hanzo legal & compliance': { portrait: '/agents/einstein.png', voice: 'bm_george' },
+  'hanzo executive assistant': { portrait: '/agents/maya.png', voice: 'bf_emma' },
+  'hanzo architect': { voice: 'bm_george' },
+  'hanzo vision': { voice: 'bm_fable' },
+  'hanzo support': { portrait: '/agents/nora.png', voice: 'af_heart' },
 }
 
 /** The role for an agent name, or undefined for one nobody cast. */
@@ -183,22 +182,21 @@ export function speakers(text: string, names: string[]): { who: string | null; t
   return out.map((one) => ({ ...one, text: one.text.trim() })).filter((one) => one.text || one.who)
 }
 
+/**
+ * Every American and British voice the speech service reads in, which is the
+ * pool an agent nobody cast is given a voice from. `am_santa` is left out: it
+ * is a character voice, not a reader.
+ */
 export const VOICES = [
-  'ash',
-  'echo',
-  'sage',
-  'nova',
-  'onyx',
-  'fable',
-  'shimmer',
-  'alloy',
-  'verse',
-  'ballad',
-  'coral',
+  'af_alloy', 'af_aoede', 'af_bella', 'af_heart', 'af_jessica', 'af_kore', 'af_nicole', 'af_nova', 'af_river', 'af_sarah', 'af_sky',
+  'am_adam', 'am_echo', 'am_eric', 'am_fenrir', 'am_liam', 'am_michael', 'am_onyx', 'am_puck',
+  'bf_alice', 'bf_emma', 'bf_isabella', 'bf_lily',
+  'bm_daniel', 'bm_fable', 'bm_george', 'bm_lewis',
 ]
 
+/** A voice for a name nobody cast: the same name always gets the same one. */
 export function fallbackVoice(name: string | undefined): string {
-  if (!name) return VOICES[0]
+  if (!name) return 'af_heart'
   let hash = 0
   for (let i = 0; i < name.length; i++) {
     hash = (hash << 5) - hash + name.charCodeAt(i)
@@ -210,31 +208,20 @@ export function fallbackVoice(name: string | undefined): string {
 /** The voice to read a character's replies in. Always returns a valid voice. */
 export const voiceOf = (name: string | undefined): string => roleOf(name)?.voice || fallbackVoice(name)
 
+/** Who a voice sounds like, read off its id — what a browser voice standing in is matched on. */
 export interface VoiceProfile {
   voice: string
-  pitch: number
-  rate: number
-  description: string
-  gender: 'male' | 'female' | 'neutral'
-}
-
-export const VOICE_PROFILES: Record<string, VoiceProfile> = {
-  ash: { voice: 'ash', pitch: 1.0, rate: 1.0, description: 'Clear, direct, technical', gender: 'male' },
-  echo: { voice: 'echo', pitch: 1.1, rate: 1.05, description: 'Adaptive, creative, resonant', gender: 'female' },
-  sage: { voice: 'sage', pitch: 0.95, rate: 1.05, description: 'Authoritative, calm, systems-minded', gender: 'male' },
-  nova: { voice: 'nova', pitch: 1.1, rate: 1.0, description: 'Energetic, articulate, engaging', gender: 'female' },
-  onyx: { voice: 'onyx', pitch: 0.85, rate: 1.0, description: 'Deep, measured, quantitative', gender: 'male' },
-  fable: { voice: 'fable', pitch: 1.05, rate: 1.12, description: 'Warm, enthusiastic, pedagogical', gender: 'male' },
-  shimmer: { voice: 'shimmer', pitch: 1.1, rate: 0.98, description: 'Precise, professional, clear', gender: 'female' },
-  alloy: { voice: 'alloy', pitch: 0.95, rate: 1.05, description: 'Visionary, forward-leaning, focused', gender: 'male' },
-  verse: { voice: 'verse', pitch: 0.9, rate: 0.95, description: 'Intentional, iconic, design-first', gender: 'male' },
-  ballad: { voice: 'ballad', pitch: 0.92, rate: 1.0, description: 'Thoughtful, deep, expansive', gender: 'male' },
-  coral: { voice: 'coral', pitch: 1.15, rate: 1.05, description: 'Friendly, supportive, organized', gender: 'female' },
+  gender: 'male' | 'female'
+  accent: 'american' | 'british'
 }
 
 export function voiceProfileOf(name: string | undefined): VoiceProfile {
-  const v = voiceOf(name)
-  return VOICE_PROFILES[v] || VOICE_PROFILES.ash
+  const voice = voiceOf(name)
+  return {
+    voice,
+    gender: voice[1] === 'm' ? 'male' : 'female',
+    accent: voice[0] === 'b' ? 'british' : 'american',
+  }
 }
 
 
