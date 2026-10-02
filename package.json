@@ -46,6 +46,7 @@
   },
   "license": "Apache-2.0 OR MIT",
   "dependencies": {
+    "@hanzo/personas": "catalog:",
     "marked": "catalog:",
     "simple-icons": "catalog:"
   },
@@ -58,13 +59,11 @@
     "@hanzo/gui": "^8.3.5",
     "@hanzo/iam": ">=0.21.28",
     "@hanzo/logo": ">=1.0.26",
-    "@hanzo/personas": ">=1.0.5",
     "@hanzo/plans": ">=1.8.9",
     "@hanzo/ui": ">=8.27.51",
     "@hanzo/usage": ">=0.1.17",
     "@hanzo/voice": ">=0.1.8",
     "@hanzogui/shell": "^8.3.20",
-    "@zenlm/models": ">=1.0.4",
     "lucide-react": ">=1.42.0",
     "react": ">=19.2.8",
     "react-dom": ">=19.2.8"
@@ -78,7 +77,6 @@
     "@hanzo/gui": "catalog:",
     "@hanzo/iam": "catalog:",
     "@hanzo/logo": "catalog:",
-    "@hanzo/personas": "catalog:",
     "@hanzo/plans": "catalog:",
     "@hanzo/ui": "catalog:",
     "@hanzo/usage": "catalog:",
@@ -90,7 +88,6 @@
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "@zenlm/models": "catalog:",
     "lucide-react": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",

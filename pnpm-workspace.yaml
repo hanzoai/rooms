@@ -43,7 +43,6 @@ catalog:
   '@types/node': 26.5.0
   '@types/react': 19.2.18
   '@types/react-dom': 19.2.7
-  '@zenlm/models': 1.0.4
   lucide-react: 1.42.0
   marked: 18.0.12
   react: 19.2.8
