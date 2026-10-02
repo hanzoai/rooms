@@ -35,7 +35,7 @@
 import { useEffect, useState } from 'react'
 import { useIam, useOrganizations } from '@hanzo/iam/react'
 import { api } from './api'
-import { superAdmin as isSuperAdmin } from './session'
+import { scope, superAdmin as isSuperAdmin } from './session'
 
 export type Tier = 'alpha' | 'beta'
 
@@ -91,13 +91,13 @@ export function useTiers(): Set<Tier> {
     }
     const ac = new AbortController()
     // The PostHog-shaped evaluate: a distinct_id and the person's org, answered
-    // with `{ featureFlags: { … } }`. The session cookie carries the principal;
-    // with none the cloud answers 403 and this falls to the empty set, which is
-    // the signed-out room — the safe direction.
+    // with `{ featureFlags: { … } }`. The bearer carries the principal, as on
+    // every other read: no host the rooms are drawn on holds a session cookie
+    // for the API, so a cookie alone was answered 403 on every page. A refusal
+    // still falls to the empty set, the signed-out room — the safe direction.
     fetch(`${api()}/v1/flags`, {
       method: 'POST',
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...scope() },
       body: JSON.stringify({ distinct_id: id, person_properties: { org: organizations[0]?.name } }),
       signal: ac.signal,
     })
