@@ -113,6 +113,7 @@ export function Crew({ to }: { to?: string } = {}) {
         items="flex-start"
         flexWrap="nowrap"
         overflowX="auto"
+        overflowY="hidden"
         gap="$2.5"
         px="$4"
         py="$3"
@@ -124,32 +125,6 @@ export function Crew({ to }: { to?: string } = {}) {
         role="group"
         aria-label="Agents"
       >
-        <Box
-          render="button"
-          onClick={() => setHiring(true)}
-          aria-label="New agent"
-          aria-haspopup="dialog"
-          shrink={0}
-        >
-          <YStack items="center" gap="$1.5" width={68}>
-            <YStack
-              width={DISC}
-              height={DISC}
-              rounded={DISC / 2}
-              borderWidth={1.5}
-              borderStyle="dashed"
-              borderColor="$soft"
-              items="center"
-              justify="center"
-              hoverStyle={{ borderColor: '$ink', bg: '$raised' }}
-            >
-              <Plus size={18} aria-hidden />
-            </YStack>
-            <Text fontSize="$1" color="$soft" numberOfLines={1}>
-              New
-            </Text>
-          </YStack>
-        </Box>
         {ordered(agents).map((one) => {
           const name = called(one.name)
           const on = room.some((there) => there.toLowerCase() === one.name.toLowerCase())
@@ -206,6 +181,33 @@ export function Crew({ to }: { to?: string } = {}) {
             </Box>
           )
         })}
+        {/* The outline that makes one more comes after the team, not before it. */}
+        <Box
+          render="button"
+          onClick={() => setHiring(true)}
+          aria-label="New agent"
+          aria-haspopup="dialog"
+          shrink={0}
+        >
+          <YStack items="center" gap="$1.5" width={68}>
+            <YStack
+              width={DISC}
+              height={DISC}
+              rounded={DISC / 2}
+              borderWidth={1.5}
+              borderStyle="dashed"
+              borderColor="$soft"
+              items="center"
+              justify="center"
+              hoverStyle={{ borderColor: '$ink', bg: '$raised' }}
+            >
+              <Plus size={18} aria-hidden />
+            </YStack>
+            <Text fontSize="$1" color="$soft" numberOfLines={1}>
+              New
+            </Text>
+          </YStack>
+        </Box>
       </XStack>
       {hiring ? <Hire onClose={() => setHiring(false)} onMade={talk} /> : null}
     </>
