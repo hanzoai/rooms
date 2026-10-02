@@ -41,12 +41,15 @@ export interface Router {
 
 interface Moving {
   router: Router
+  /** The address's query, for the rooms that read one (Dev's `?at=`). */
   search: URLSearchParams | null
   route: string
   Link: Link
 }
 
-export interface RoomsProps extends Moving {
+export interface RoomsProps extends Omit<Moving, 'search'> {
+  /** Absent where no mounted room reads the query, so a static export needs no Suspense for it. */
+  search?: URLSearchParams | null
   children?: ReactNode
 }
 
@@ -97,7 +100,7 @@ function Look() {
   return null
 }
 
-export function Rooms({ router, search, route, Link, children }: RoomsProps) {
+export function Rooms({ router, search = null, route, Link, children }: RoomsProps) {
   return (
     <Context.Provider value={{ router, search, route, Link }}>
       <Look />
