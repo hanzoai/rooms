@@ -47,7 +47,7 @@ import { planName } from './lib/plans'
 import { api } from './lib/api'
 import { renewal, useSubscription, useTier } from './lib/tier'
 import { sku, spendShown, useLimits } from './lib/limits'
-import { Meters } from './meters'
+import { PlanUsage } from '@hanzo/ui/product/PlanUsage'
 import { Look } from './look'
 import { ProviderMark } from './ProviderMark'
 import { org, pick } from './lib/session'
@@ -465,7 +465,8 @@ function Billing() {
 /**
  * The one usage panel every Hanzo product renders, reading as this account — for a
  * reader with no plan. A plan holder's usage is the plan's shares (`meters` draws
- * them where usage is the subject), never money (spendShown).
+ * them, with the plan's terms and its actions, where usage is the subject), never
+ * money (spendShown).
  */
 function Usage({ sections, title, meters = false }: { sections?: Record<string, boolean>; title?: string; meters?: boolean }) {
   const { accessToken, isAuthenticated } = useIam()
@@ -474,13 +475,21 @@ function Usage({ sections, title, meters = false }: { sections?: Record<string, 
   if (!isAuthenticated || !accessToken) {
     return <Text fontSize="$3" color="$soft">Sign in to see your usage.</Text>
   }
-  if (read.limits?.plan) return meters ? <Meters limits={read.limits} large /> : null
-  if (!spendShown(read)) return null
+  const plan = meters && read.limits ? <PlanUsage limits={read.limits} plan={planName(read.limits.plan) || undefined} notice={read.notice} /> : null
+  if (read.limits?.plan || !spendShown(read)) return plan
   // The address is read HERE rather than at import: the panel sends the bearer
   // with every read, and a credentialed read to an absolute address from a page
   // the gateway does not admit dies in preflight — which drew this panel as an
   // account that had spent nothing.
-  return <UsagePanel baseUrl={api()} token={accessToken} sections={sections} title={title} upgrade={payPage()} />
+  const spend = <UsagePanel baseUrl={api()} token={accessToken} sections={sections} title={title} upgrade={payPage()} />
+  return plan ? (
+    <YStack gap="$6">
+      {plan}
+      {spend}
+    </YStack>
+  ) : (
+    spend
+  )
 }
 
 /** Keys are minted and revoked through the console, which holds the one issuer. */

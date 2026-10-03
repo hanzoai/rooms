@@ -29,7 +29,7 @@
 // pre-emptively refuses on the gateway's behalf.
 
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { capped, detail, familyOf, planRequired, plainly, refused } from "./failure";
+import { billed, detail, familyOf, planRequired, plainly, refused } from "./failure";
 import { Prose } from "./Prose";
 import {
   useAgent,
@@ -56,9 +56,9 @@ import { Anchor, Box, Button, Text, Tooltip, TooltipContent, TooltipTrigger, Vie
 import { Control } from "@hanzo/composer";
 import { useIam, useIamToken } from "@hanzo/iam/react";
 import { hasSession, org } from "./lib/session";
-import { chats, clock, sku, useLimits } from "./lib/limits";
+import { chats, sku, useLimits } from "./lib/limits";
+import { LimitedBanner } from "@hanzo/ui/product/LimitedBanner";
 import { WEB } from "./lib/web";
-import { Meters } from "./meters";
 import { useHydrated } from "./lib/hydrated";
 import { base, served } from "./lib/ai";
 import { onServed, type Served } from "./lib/served";
@@ -75,7 +75,7 @@ import { useStarred } from "./stars";
 import { useModel } from "./model";
 import { Enso, nameOf, useEffort } from "./enso";
 import { checkoutUrl } from './lib/pay';
-import { onFree, planName } from './lib/plans';
+import { onFree } from './lib/plans';
 import { Upgrade, useFree, type Ask } from './Upgrade';
 import { enter, LOGIN } from './lib/destination';
 import { first } from './lib/first';
@@ -699,10 +699,14 @@ function Thread({
   const offered = useMemo(() => models.filter((m) => sku(m.id)), [models]);
   const wanted = sku(preferred) ? preferred : ENSO;
   const model = persona?.model || served(models, anonymous ? FREE : wanted);
-  // WHAT THE PLAN HAS LEFT, as shares of the session, the day and the month
-  // (lib/hanzo/limits.ts). Read again whenever a send settles, below.
-  const { limits, reload: reread } = useLimits(!anonymous, org());
+  // THE PLAN'S USAGE (lib/limits.ts), kept current by every chat answer's
+  // headers and read again whenever a send settles, below. The room draws no
+  // bars and no near note — those live on Settings → Usage. It says something
+  // only once the reader is turned away: a reply answered from a free model, or
+  // a refusal.
+  const { limits, notice, reload: reread } = useLimits(!anonymous, org(), (id) => nameOf(catalog, id));
   const held = Boolean(limits?.plan);
+  const pause = notice && (notice.fallback || notice.refused) ? notice : null;
   // A MODEL THE FREE PLAN DOES NOT INCLUDE IS ASKED FOR, NOT CHOSEN. On Free,
   // picking a model the plan's row does not run (`onFree`) leaves the choice
   // where it was and opens the upgrade, titled with the model; so does a turn
@@ -1155,12 +1159,11 @@ function Thread({
     const whom = addressed(text, room);
     const wrong = failed?.error ?? null;
     const how = wrong ? refusalOf(wrong) : null;
-    // A SPENT WINDOW is the plan holder's own limit, said with its reset and,
-    // below the top plan, the next plan's checkout. Asking again before the
-    // reset meets the same answer, so it offers no Try again.
-    const cap = wrong ? capped(wrong) : null;
-    const next = cap?.href ? planName(limits?.upgrade) : null;
-    const resign = !cap && !!wrong && (refused(wrong) || /audience not allowed|invalid access token/i.test(wrong.message));
+    // A BILLING REFUSAL is said in the gateway's words; its way past —
+    // Upgrade, Add prepaid credit — is the banner over the composer. The free
+    // plan's cap answers the same until it resets, so it offers no Try again.
+    const bill = wrong ? billed(wrong) : null;
+    const resign = !bill && !!wrong && (refused(wrong) || /audience not allowed|invalid access token/i.test(wrong.message));
     const lift = free ? planRequired(wrong) : null;
     const said = !failed
       ? "No answer came back for this question."
@@ -1168,8 +1171,8 @@ function Thread({
         ? `${nameOf(models, model)} sent nothing for ${STALL / 60_000} minutes, so the turn was stopped.`
         : failed.empty
           ? `${nameOf(models, model)} answered with nothing.`
-          : cap
-            ? `You've used ${cap.limit === "session" ? "this session's" : "today's"} limit.${cap.resets ? ` Resets at ${clock(cap.resets)}.` : ""}`
+          : bill
+            ? notice?.message ?? (bill.message || plainly(wrong, "this conversation"))
             : resign
             ? anonymous
               ? "Sign in to ask this."
@@ -1178,22 +1181,16 @@ function Thread({
               ? `${familyOf(model) || nameOf(models, model)} is unavailable right now.`
               : plainly(wrong, "this conversation");
     return (
-      <Failure onRetry={resign || cap ? undefined : () => speak(text, question.id)}>
+      <Failure onRetry={resign || bill?.code === "free_plan_cap" ? undefined : () => speak(text, question.id)}>
         <YStack gap="$2">
           <Text fontSize="$3" color="$ink">
             {whom.length ? `No answer from ${join(whom)}. ` : ""}
             {said}
           </Text>
           {how?.provider && wrong ? <Why text={detail(wrong)} /> : null}
-          {cap?.href || resign || lift || how?.wallet || how?.visitor ? (
+          {!bill && (resign || lift || how?.wallet || how?.visitor) ? (
             <XStack gap="$2" flexWrap="wrap">
-              {cap?.href ? (
-                <Anchor href={cap.href}>
-                  <Button size="sm" variant="outline">
-                    {next ? `Upgrade to ${next}` : "Upgrade"}
-                  </Button>
-                </Anchor>
-              ) : resign ? (
+              {resign ? (
                 <Button
                   size="sm"
                   onClick={() => {
@@ -1789,8 +1786,12 @@ function Thread({
           // WHAT GOES WITH THE MESSAGE, above the frame: one chip a file, each
           // with its own remove, and the reason any file was refused.
           head:
-            files.length || turnedAway || preparing || talk.open || talk.refusal ? (
+            files.length || turnedAway || preparing || talk.open || talk.refusal || pause ? (
               <YStack width="calc(100% - 32px)" maxW={`calc(${MEASURE} - 3rem)`} mx="auto" gap="$1.5">
+                {/* TURNED AWAY: what paused, the ways past it, and the usage page. */}
+                {pause ? (
+                  <LimitedBanner message={pause.message} actions={pause.actions} onUsage={() => showSettings("usage")} />
+                ) : null}
                 {files.length ? (
                   <XStack gap="$1.5" flexWrap="wrap" role="list" aria-label="Attached files" data-slot="composer-attached">
                     {files.map((one) => (
@@ -1877,14 +1878,6 @@ function Thread({
               </Control>
             </XStack>
           ),
-          // WHAT THE PLAN HAS LEFT, under the frame and at its measure, for a
-          // plan holder only: Free keeps the free lane's own notice.
-          foot:
-            held && limits && (limits.session || limits.day || limits.month) ? (
-              <YStack width="calc(100% - 32px)" maxW={`calc(${MEASURE} - 3rem)`} mx="auto">
-                <Meters limits={limits} />
-              </YStack>
-            ) : undefined,
         }}
       />
       {/* The crew sits under the composer: who you can talk to, and the

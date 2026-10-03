@@ -2398,6 +2398,7 @@ function Frame({
               onToggleCollapse={toggle}
               onProfile={() => setProfiling(true)}
               onAppearance={() => showSettings("general")}
+              onUsage={() => showSettings("usage")}
             />
           </>
         ) : null

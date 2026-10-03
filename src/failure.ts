@@ -11,6 +11,7 @@
 // ONE FUNCTION, because every room owes the same three answers and three copies
 // would drift into three vocabularies for one event.
 
+import { refusalOf, type Refusal } from '@hanzo/ui/product/limits'
 import { told } from './lib/reach'
 
 /**
@@ -123,29 +124,15 @@ export function planRequired(error: unknown): { href?: string } | null {
   return { href: ours(said?.upgrade_url) }
 }
 
-/** A plan holder's spent window. */
-export interface Cap {
-  limit: 'session' | 'day'
-  /** When it opens again, RFC 3339. */
-  resets: string | null
-  /** The next plan's checkout, on hanzo.ai only. Absent at the top plan. */
-  href?: string
-}
-
 /**
- * Whether a refusal is a plan's usage limit, and which window.
- *
- * A paid plan is a subscription with limits: a spent session or day comes back
- * 429 `usage_cap_exceeded` naming the window, its reset and, below the top
- * plan, an `upgrade_url`. The month refuses nothing — Enso and Zen keep
- * answering — so no other window is a cap. The code decides, never the
- * sentence, and the address is kept by the rule `planRequired` keeps.
+ * A billing refusal in the gateway's envelope — the plan's included usage
+ * spent, a paid plan required, the free plan's cap, or no balance — or null for
+ * any other failure. The code decides, never the sentence.
  */
-export function capped(error: unknown): Cap | null {
-  const said = ((error as { body?: unknown } | null)?.body as { error?: { code?: unknown; limit?: unknown; resets_at?: unknown; upgrade_url?: unknown } } | null)?.error
-  if (said?.code !== 'usage_cap_exceeded' || status(error) !== 429) return null
-  if (said.limit !== 'session' && said.limit !== 'day') return null
-  return { limit: said.limit, resets: typeof said.resets_at === 'string' ? said.resets_at : null, href: ours(said.upgrade_url) }
+export function billed(error: unknown): Refusal | null {
+  const code = status(error)
+  if (code !== 402 && code !== 429) return null
+  return refusalOf((error as { body?: unknown } | null)?.body, code)
 }
 
 function ours(href: unknown): string | undefined {

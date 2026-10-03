@@ -7,8 +7,11 @@
  * neither, so the site's client is built on `observed(fetch)`, which reads
  * them off each completion as it passes and tells the listeners — the header
  * when the gateway exposes it, else the first frame that names a model. Every
- * byte is passed through untouched.
+ * byte is passed through untouched. Each chat answer's usage headers, and a
+ * billing refusal's envelope, go to @hanzo/ui's `observe`.
  */
+
+import { observe } from '@hanzo/ui/product/useLimits'
 
 /** A completion's asked and answering models. */
 export interface Served {
@@ -33,11 +36,17 @@ const tell = (heard: Served) => {
 /** The completion route, whatever host the client was built for. */
 const COMPLETION = /\/v1\/chat\/completions(?:[?#]|$)/
 
+/** Every chat route whose answer carries the plan's usage headers or a billing refusal. */
+const CHAT = /\/v1\/chat\/(?:completions|public)(?:[?#]|$)/
+
 /** A fetch that tells `onServed` listeners which model answered each completion. */
 export function observed(base: typeof fetch): typeof fetch {
   return async (input, init) => {
     const res = await base(input, init)
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+    // The plan's usage rides every chat answer and every refusal: the limits
+    // hear both before anything else reads the body.
+    if (CHAT.test(url)) observe(res)
     if (!COMPLETION.test(url) || !res.ok) return res
     let asked = ''
     try {

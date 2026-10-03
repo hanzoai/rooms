@@ -64,7 +64,7 @@
     "@hanzo/iam": ">=0.21.28",
     "@hanzo/logo": ">=1.0.26",
     "@hanzo/plans": ">=1.8.9",
-    "@hanzo/ui": ">=8.27.51",
+    "@hanzo/ui": ">=8.27.56",
     "@hanzo/usage": ">=0.1.17",
     "@hanzo/voice": ">=0.1.12",
     "@hanzogui/shell": "^8.3.20",

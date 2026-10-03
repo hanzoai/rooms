@@ -3,14 +3,14 @@
 /**
  * WHO YOU ARE, at the foot of the sidebar: the person, and the person's menu.
  *
- * Profile, appearance, security and sign out — the account, and nothing that
+ * Profile, appearance, usage, security and sign out — the account, and nothing that
  * belongs to the workspace. Which workspace you stand in is the switcher at the
  * TOP of the sidebar, and what it may spend is its Billing, so this card shows
  * neither: a balance here read as the person's money when it is the workspace's.
  */
 
 import { useEffect, useRef, useState } from 'react'
-import { ChevronsUpDown, LogOut, PanelLeftClose, Palette, Shield, UserRound } from 'lucide-react'
+import { Activity, ChevronsUpDown, LogOut, PanelLeftClose, Palette, Shield, UserRound } from 'lucide-react'
 import { XStack, YStack, Text, Box } from '@hanzo/ui'
 import { sheet } from '@hanzo/ui/glass'
 import { useIam } from '@hanzo/iam/react'
@@ -46,12 +46,15 @@ export function Account({
   onToggleCollapse,
   onProfile,
   onAppearance,
+  onUsage,
 }: {
   onToggleCollapse?: () => void
   /** Opens the profile beside the room. Absent, the row goes to hanzo.id. */
   onProfile?: () => void
   /** Opens the appearance settings. Absent, the row is not drawn. */
   onAppearance?: () => void
+  /** Opens the plan's usage settings. Absent, the row is not drawn. */
+  onUsage?: () => void
 } = {}) {
   const { user } = useIam()
   const logout = useSignOut()
@@ -114,6 +117,11 @@ export function Account({
           {onAppearance ? (
             <Row icon={<Palette size={15} aria-hidden />} onPress={act(onAppearance)}>
               Appearance
+            </Row>
+          ) : null}
+          {onUsage ? (
+            <Row icon={<Activity size={15} aria-hidden />} onPress={act(onUsage)}>
+              Usage
             </Row>
           ) : null}
           <Row icon={<Shield size={15} aria-hidden />} onPress={act(() => window.location.assign(link(`${iam()}/account/security`)))}>

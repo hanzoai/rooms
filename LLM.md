@@ -111,6 +111,17 @@ Gates: `pnpm typecheck`, `pnpm lint:design` (ratchet in
 `hanzo-design.allow.json`), `pnpm build`. Publish: bump `version`, push main;
 `.github/workflows/publish.yml` publishes what npm does not serve.
 
+## Plan usage
+
+`lib/limits.ts` is @hanzo/ui's `useLimits` reading `GET /v1/ai/limits` with
+`scope()`; `lib/served.ts` hands every `/v1/chat/{completions,public}` answer to
+`observe`, so `X-Hanzo-Usage`/`-Fallback` and a `billing_error` refusal update it
+at once. Chat draws the pause (`LimitedBanner`, Upgrade and Add prepaid credit)
+or the near note over the composer, `Enso` marks a paused class's models
+"Paused" and still picks them, and a refusal is said in the thread in the
+server's words. Settings → Usage draws `PlanUsage`. Shares only: no amount,
+count or cap is drawn anywhere.
+
 ## Voice
 
 Every voice path runs on `@hanzo/voice` against the platform's speech
