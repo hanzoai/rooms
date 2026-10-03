@@ -1,6 +1,6 @@
 {
   "name": "@hanzo/rooms",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "The workspace rooms — Home, Chat, Inbox, Contacts, Meet, Cal, Drive, Board, Work, Bots — and the frame that holds them, once, for every Hanzo surface.",
   "type": "module",
   "main": "./dist/index.js",
@@ -66,7 +66,7 @@
     "@hanzo/plans": ">=1.8.9",
     "@hanzo/ui": ">=8.27.51",
     "@hanzo/usage": ">=0.1.17",
-    "@hanzo/voice": ">=0.1.11",
+    "@hanzo/voice": ">=0.1.12",
     "@hanzogui/shell": "^8.3.20",
     "lucide-react": ">=1.42.0",
     "react": ">=19.2.8",
