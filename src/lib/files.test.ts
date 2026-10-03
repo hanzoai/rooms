@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
-import { chatKey, MULTIPART_AT, pool, slug, upload, type Api } from './files'
+import { chatKey, MULTIPART_AT, pct, pool, slug, upload, type Api } from './files'
 
 /** Every PUT the browser would have sent, and how the store answers each. */
 let puts: { url: string; size: number }[] = []
@@ -155,5 +155,15 @@ describe('names', () => {
     Object.defineProperty(f, 'relative', { value: 'docs/../../a.md' })
     expect(chatKey(f)).toBe('chat/docs/a.md')
     expect(chatKey(file(1, 'b.md'))).toBe('chat/b.md')
+  })
+})
+
+describe('progress', () => {
+  test('a stage reports a whole percent of its own total, and none when it has none', () => {
+    expect(pct({ done: 45, total: 100 })).toBe(45)
+    expect(pct({ done: 2, total: 3 })).toBe(66)
+    expect(pct({ done: 9, total: 4 })).toBe(100)
+    expect(pct({ done: 3 })).toBeUndefined()
+    expect(pct({ done: 0, total: 0 })).toBeUndefined()
   })
 })

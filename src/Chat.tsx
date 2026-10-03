@@ -46,7 +46,7 @@ import {
 } from "@hanzo/ai";
 import { ASK, Chat as ChatSurface, Code, Failure, Parts, words, type Said } from "@hanzo/ui/chat";
 import { carriedIn, compose, partsOf, said as told, weigh } from "./lib/attach";
-import { dropped, readable, refOf, retrieve, type FileRef, type WorkFile } from "./lib/files";
+import { dropped, pct, readable, refOf, retrieve, type FileRef, type WorkFile } from "./lib/files";
 import { channel, drop, hold, landed, spend, take, usePane, useWorkFile, type Held, type Via } from "./pane";
 import { Face, brief as roomBrief, join, roleOf, roomTurn, roster as rosterLine, rosterOf, speakers, speaksOf, voiceOf } from "./cast";
 import { SpeakButton, cleanForSpeech } from "./speech";
@@ -400,28 +400,33 @@ function unread(list: readonly WorkFile[]): string | undefined {
   return said || undefined;
 }
 
+/** The files a turn carries that are indexed less than whole, and why. */
+function partly(list: readonly WorkFile[]): string | undefined {
+  const parts = list.filter((f) => f.note).map((f) => `${f.name}: ${f.note!.replace(/\n/g, " ")}`);
+  return parts.length ? parts.join("; ") : undefined;
+}
+
 /** How far a file has got, in a word or two. */
 function progress(state: Held["state"], sent: number, f: WorkFile | undefined): string {
   if (state === "uploading") return `${Math.floor(sent * 100)}%`;
   if (state === "queued") return "queued";
   if (state === "indexing") {
-    switch (f?.stage) {
-      case "extract":
-        return "reading";
-      case "toc":
-        return "contents";
-      case "passages":
-        return "passages";
-      case "embed":
-        return f.passages ? `indexing ${Math.floor(((f.embedded ?? 0) / f.passages) * 100)}%` : "indexing";
-      case "graph":
-        return "linking";
-      default:
-        return "indexing";
-    }
+    const word = f?.stage ? STAGE[f.stage] : "indexing";
+    const at = f ? pct(f) : undefined;
+    return at === undefined ? word : `${word} ${at}%`;
   }
+  if (state === "ready" && f?.clipped) return "ready, in part";
   return state;
 }
+
+/** What each stage of a file's ingest is doing, in a word. */
+const STAGE: Record<NonNullable<WorkFile["stage"]>, string> = {
+  extract: "reading",
+  toc: "contents",
+  passages: "passages",
+  graph: "linking",
+  embed: "vectors",
+};
 
 /** One chip: the file's glyph, its name, and how far it has got. */
 function Chip({
@@ -440,7 +445,7 @@ function Chip({
   onRemove?: () => void;
 }) {
   const bad = state === "failed";
-  const why = state === "failed" || state === "stored" ? file?.error : undefined;
+  const why = state === "failed" || state === "stored" ? file?.error : file?.note;
   return (
     <XStack
       role="listitem"
@@ -1101,7 +1106,7 @@ function Thread({
           why = "the workspace could not be read just now";
         }
         if (!grounds?.passages.length) why = why ?? unread(now);
-        guarded(compose(text, { attached, reused }, grounds, why));
+        guarded(compose(text, { attached, reused }, grounds, why, partly(now)));
       } finally {
         setPreparing(null);
       }

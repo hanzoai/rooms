@@ -13,25 +13,37 @@
 import { useEffect, useState } from 'react'
 import { ArrowLeft, MessageSquare, X } from 'lucide-react'
 import { Box, Button, Text, XStack, YStack } from '@hanzo/ui'
-import { section as openSection, toc, type Api, type Opened, type Passage, type TocEntry, type WorkFile } from './lib/files'
+import { pct, section as openSection, toc, type Api, type Opened, type Passage, type TocEntry, type WorkFile } from './lib/files'
 import { BAD } from './lib/mix'
+
+/** What each stage of a file's ingest is doing, as a person reads it. */
+const STAGE: Record<NonNullable<WorkFile['stage']>, string> = {
+  extract: 'reading',
+  toc: 'contents',
+  passages: 'passages',
+  graph: 'linking',
+  embed: 'vectors',
+}
 
 /** How far a file's ingest has got, as Drive's badge and this pane's head say it. */
 export function standing(f: WorkFile): string {
+  const at = pct(f)
   switch (f.status) {
-    case 'ready':
+    case 'ready': {
       // Ready means read; while its vectors fill in, search by meaning grows.
-      if (f.stage === 'embed' && f.passages) return `Indexed · ${f.sections ?? 0} sections · vectors ${Math.floor(((f.embedded ?? 0) / f.passages) * 100)}%`
-      return `Indexed · ${f.sections ?? 0} sections`
+      const head = `${f.clipped ? 'Indexed in part' : 'Indexed'} · ${f.sections ?? 0} sections`
+      return f.stage === 'embed' && at !== undefined ? `${head} · vectors ${at}%` : head
+    }
     case 'stored':
       return 'Kept, not indexed'
     case 'failed':
       return 'Indexing failed'
     case 'queued':
       return 'Queued'
-    default:
-      if (f.stage === 'embed' && f.passages) return `Indexing ${Math.floor(((f.embedded ?? 0) / f.passages) * 100)}%`
-      return `Indexing · ${f.stage ?? 'starting'}`
+    default: {
+      const word = f.stage ? STAGE[f.stage] : 'starting'
+      return at === undefined ? `Indexing · ${word}` : `Indexing · ${word} ${at}%`
+    }
   }
 }
 
@@ -46,7 +58,7 @@ export function Badge({ f }: { f: WorkFile }) {
       data-slot="drive-index"
       data-state={f.status}
       data-stage={f.stage ?? ''}
-      {...(f.error ? ({ title: f.error } as object) : null)}
+      {...(f.error || f.note ? ({ title: f.error || f.note } as object) : null)}
     >
       {standing(f)}
     </Text>
@@ -164,6 +176,11 @@ export function Contents({
           <Text fontSize="$1" color="$soft" numberOfLines={1}>
             {standing(shown)}
           </Text>
+          {shown.note ? (
+            <Text fontSize="$1" color="$faint" data-slot="drive-note">
+              {shown.note.replace(/\n/g, ' ')}
+            </Text>
+          ) : null}
         </YStack>
         <Button size="sm" onClick={() => onAsk(shown)} aria-label="Ask in chat">
           <MessageSquare size={14} />

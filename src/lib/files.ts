@@ -37,8 +37,17 @@ export interface WorkFile {
   sections?: number
   passages?: number
   embedded?: number
+  /** How far the running stage has come, of `total`, in that stage's units. */
+  done?: number
+  total?: number
+  /** Where the file is indexed less than whole, and why, in words. */
+  note?: string
   parent?: string
 }
+
+/** The running stage's progress as a whole percent, when the index reports one. */
+export const pct = (f: Pick<WorkFile, 'done' | 'total'>): number | undefined =>
+  f.total && f.total > 0 ? Math.min(100, Math.floor(((f.done ?? 0) / f.total) * 100)) : undefined
 
 /** What a chat message carries of a file: enough to name it and ask about it. */
 export interface FileRef {

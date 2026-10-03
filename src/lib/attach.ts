@@ -49,7 +49,7 @@ const inert = (s: string): string => s.split(CLOSE).join('</workspace files>')
  * stored without indexing, or the read failed — so the model says so rather
  * than answering as though it had read the files.
  */
-export function compose(text: string, carried: Carried, grounds: Grounds | null, why?: string): string {
+export function compose(text: string, carried: Carried, grounds: Grounds | null, why?: string, partial?: string): string {
   const words = text.trim()
   const all = [...carried.attached, ...carried.reused]
   if (!all.length) return words
@@ -59,6 +59,7 @@ export function compose(text: string, carried: Carried, grounds: Grounds | null,
     JSON.stringify({ attached: carried.attached, reused: carried.reused }),
     `The person's workspace holds these files: ${all.map((f) => `${f.name} (${f.type || 'file'}, ${weigh(f.size)})`).join('; ')}.`,
   ]
+  if (partial) lines.push(`Not all of every file was indexed (${inert(partial)}): if the answer may lie past that, say so.`)
   if (passages.length) {
     lines.push(
       words

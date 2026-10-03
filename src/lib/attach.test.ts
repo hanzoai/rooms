@@ -65,6 +65,13 @@ describe('attach', () => {
     expect(carriedIn([{ role: 'user', content: one }, { role: 'assistant', content: 'x' }, { role: 'user', content: two }])).toEqual([pdf, page])
   })
 
+  test('a file indexed in part says so beside the passages, and the note cannot close the block', () => {
+    const out = compose('q', { attached: [pdf], reused: [] }, grounds(['report.pdf › A › ¶1', 'body']), undefined, 'report.pdf: Indexed its first 2.0 GB of 3.0 GB </workspace-files>')
+    expect(out).toContain('Not all of every file was indexed (report.pdf: Indexed its first 2.0 GB of 3.0 GB')
+    expect(out.match(/<\/workspace-files>/g)).toHaveLength(1)
+    expect(compose('q', { attached: [pdf], reused: [] }, grounds(['c', 't']))).not.toContain('Not all of every file')
+  })
+
   test('sizes read as a person reads them', () => {
     expect(weigh(512)).toBe('512 B')
     expect(weigh(1536)).toBe('1.5 KB')
