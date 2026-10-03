@@ -161,6 +161,24 @@ describe('researched', () => {
     expect(hops.at(-1)!.body.messages.at(-1).role).toBe('system')
   })
 
+  test('an answer of no words after the lookups is asked for once more, without tools', async () => {
+    const thinks = { choices: [{ index: 0, delta: { reasoning: 'weighing the headlines' }, finish_reason: 'stop' }] }
+    const g = gateway([sse([thinks]), sse([said('Today: [AP](https://apnews.com/).')])])
+    const res = await researched(g.base, NOW)(`${API}/v1/chat/completions`, turn('latest news today'))
+    expect((await read(res)).content).toBe('Today: [AP](https://apnews.com/).')
+    const hops = g.completions()
+    expect(hops).toHaveLength(2)
+    expect(hops[1].body.tools).toBeUndefined()
+    expect(hops[1].body.messages.at(-1)).toMatchObject({ role: 'system' })
+    expect(hops[1].body.messages.at(-1).content).toMatch(/empty/)
+  })
+
+  test('an answer of no words is asked for once, not forever', async () => {
+    const g = gateway([sse([]), sse([]), sse([said('late')])])
+    await read(await researched(g.base, NOW)(`${API}/v1/chat/completions`, turn('latest news today')))
+    expect(g.completions()).toHaveLength(2)
+  })
+
   test('calls past the per-round limit are refused, not run', async () => {
     const many = {
       choices: [

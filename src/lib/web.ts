@@ -26,7 +26,8 @@
  *
  * Bounded: at most ROUNDS rounds of lookups the model asks for, CALLS lookups in
  * a round, and every lookup on its own clock. The request after the last round
- * offers no tools, so the turn ends in words.
+ * offers no tools, so the turn ends in words; a reply of no words is asked for
+ * once more.
  *
  * A page is read only when the conversation or one of this turn's searches
  * named it. Page text is written by strangers and can tell a model to fetch an
@@ -228,6 +229,10 @@ function rule(now: Date): string {
 /** What the model is told when its rounds are spent. */
 const SPENT =
   'You have used every web lookup this turn allows. Answer the person now, in words, from what you have found, citing each fact inline as a Markdown link [page title](url) to the page it came from.'
+
+/** What a model that answered with nothing is told, once. */
+const SILENT =
+  'Your last reply was empty. Answer the person now, in words, from what the lookups found, citing each fact inline as a Markdown link [page title](url).'
 
 /** A search that could not run, said so the model says it plainly. */
 const unavailable = (why: unknown) =>
@@ -442,9 +447,21 @@ export function researched(base: typeof fetch, clock: () => Date = () => new Dat
       async start(out) {
         try {
           let res = first
+          let nudged = false
           for (let round = 0; ; round++) {
             const hop = await relay(res, out)
-            if (!hop.calls.length) break
+            if (!hop.calls.length) {
+              // AN ANSWER OF NO WORDS after a reasoning model has read a page of
+              // results: asked once more, without tools, it answers.
+              if (hop.content.trim() || nudged) break
+              nudged = true
+              res = await ask([...messages, { role: 'system', content: SILENT }], true)
+              if (!streams(res)) {
+                out.enqueue(event({ error: { message: await refusal(res) } }))
+                break
+              }
+              continue
+            }
             const results = await Promise.all(
               hop.calls.map((tc, i) =>
                 i < CALLS ? run(call, tc, words, now, seen) : Promise.resolve(`skipped: at most ${CALLS} lookups run in one step.`),
