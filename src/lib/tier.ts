@@ -28,7 +28,12 @@ import { api } from './api'
 import { bearer, org, orgs, scope } from './session'
 import { list } from './list'
 import { money } from './pay'
-import { date } from './limits'
+
+/** A period's end as a sentence states it — "Oct 30, 2026" — or '' for none. Periods end on UTC days. */
+function date(iso: string | null | undefined): string {
+  const t = iso ? Date.parse(iso) : NaN
+  return Number.isNaN(t) ? '' : new Date(t).toLocaleDateString('en-US', { timeZone: 'UTC', year: 'numeric', month: 'short', day: 'numeric' })
+}
 
 /** The plan, as billing names it. */
 export interface TierLimits {
