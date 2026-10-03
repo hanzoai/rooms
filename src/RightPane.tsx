@@ -164,13 +164,8 @@ function outputs(said: ChatMessage[]): Mark[] {
   const out: Mark[] = []
   said.forEach((m, turn) => {
     if (m.role !== 'assistant') return
-    // Files a turn carried by reference: their names in the turn, their bytes in the workspace.
-    const read = told(words(m))
-    for (const f of read.carried?.attached ?? []) {
-      out.push({ id: `sw${turn}.${f.id}`, name: f.name, kind: f.type.startsWith('image/') ? 'image' : 'file', file: f.id, mime: f.type })
-    }
     let n = 0
-    for (const [, info, body] of read.text.matchAll(FENCE)) {
+    for (const [, info, body] of words(m).matchAll(FENCE)) {
       n += 1
       const named = fenceName(info, n)
       out.push({
@@ -200,8 +195,13 @@ function sources(said: ChatMessage[], held: Held[]): Mark[] {
     pictures(m).forEach((href, i) => {
       out.push({ id: `s${turn}.${i}`, name: 'Attached image', kind: 'image', href })
     })
+    // Files a turn carried by reference: their names in the turn, their bytes in the workspace.
+    const read = told(words(m))
+    for (const f of read.carried?.attached ?? []) {
+      out.push({ id: `sw${turn}.${f.id}`, name: f.name, kind: f.type.startsWith('image/') ? 'image' : 'file', file: f.id, mime: f.type })
+    }
     let n = 0
-    for (const [, info, body] of words(m).matchAll(FENCE)) {
+    for (const [, info, body] of read.text.matchAll(FENCE)) {
       n += 1
       const named = info.trim()
       if (!suffix(named)) continue
