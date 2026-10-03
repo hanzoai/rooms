@@ -350,7 +350,8 @@ export interface Passage {
 export interface Grounds {
   sections: { file: Passage['file']; section: Passage['section']; summary?: string }[]
   passages: Passage[]
-  picked: 'model' | 'search'
+  /** whole: short enough to read every section; model: a model read the ToCs; search: the best passages' sections. */
+  picked: 'whole' | 'model' | 'search'
   degraded?: boolean
 }
 
