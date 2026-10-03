@@ -115,15 +115,22 @@ Gates: `pnpm typecheck`, `pnpm lint:design` (ratchet in
 
 Every voice path runs on `@hanzo/voice` against the platform's speech
 services, with the reader's IAM bearer (`useIamToken`) and the host from
-`base()`: `/v1/audio/transcriptions` (`zen-scribe`) listens, `/v1/audio/speech`
-(`zen-voice-mini`) reads. The browser's recogniser and speechSynthesis only
+`base()`: `/v1/audio/transcriptions` and `/v1/audio/transcript` (`zen-scribe`)
+listen, `/v1/audio/speech` (`zen-voice-mini`) reads, `/v1/voice` converses. The browser's recogniser and speechSynthesis only
 stand in when the platform refuses, and the refusal is shown (`<Voice/>`'s
 label, `SpeakButton`'s, Meet's status line).
 
-- Chat's mic dictates into the draft. While it is open a finished reply is read
-  through the machine's `say`, part by part in each speaker's voice.
-- Meet's hands-free is the same machine: each utterance is answered and the
-  answer read by `say`, so barge-in stops it.
+- Chat's mic dictates into the draft (`useDictation`: each utterance lands
+  after what the draft held). While it is open a finished reply is read through
+  the machine's `say`, part by part in each speaker's voice, and a part spoken
+  over ends the reading.
+- Chat's talk button is talk mode (`useTalk`, the realtime socket `/v1/voice`):
+  hands-free, the answer spoken back, its words drawn above the composer
+  (`composer-talk-reply`). Its own conversation; nothing posts into the thread.
+- Meet's hands-free is the dictation machine: each utterance is answered and the
+  answer read by `say`, so barge-in stops it. Meet's Transcribe is the live
+  transcript (`useTranscript`, `/v1/audio/transcript`): settled text goes into
+  the notes, the decoding tail shows under them (`live-caption`).
 - Listen (`SpeakButton`), the Meet speaker test and briefing use `speakAgent`,
   called from the click so Safari lets the reply play.
 - `cast.tsx` voices are speech-service ids (`am_michael`, `bf_emma`): first

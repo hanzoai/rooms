@@ -20,11 +20,12 @@ import {
   Tv,
   LayoutGrid,
   ArrowRight,
+  Captions,
 } from 'lucide-react'
 import { Text, View, XStack, YStack } from '@hanzo/gui'
 import { Button } from '@hanzo/ui'
 import { useIamToken } from '@hanzo/iam/react'
-import { REFUSED, speech, useVoice } from '@hanzo/voice'
+import { REFUSED, speech, useTranscript, useVoice } from '@hanzo/voice'
 import { Face, voiceOf } from './cast'
 import { member } from './team'
 import { cleanForSpeech, speakAgent, stopAgentSpeech, AudioWave, useAgentSpeech } from './speech'
@@ -279,9 +280,22 @@ export function Meet() {
   })
   const handsFreeSay = handsFree.say
 
+  // LIVE TRANSCRIPT: what is said in the call lands in its notes as it settles,
+  // on Hanzo's growing transcript (/v1/audio/transcript), and the line under the
+  // notes shows the words still being decoded. Silence is neither decoded nor
+  // billed. No SpeechRecognition anywhere, so every browser that can record
+  // takes part.
+  const [caption, setCaption] = useState('')
+  const transcriber = useTranscript({
+    speech: ear,
+    onPartial: setCaption,
+    onSettled: (text) => setLiveNotes((prev) => [...prev, `${clock()}: You: ${text}`]),
+  })
+  const transcriberNote = transcriber.reason ?? (transcriber.refusal ? REFUSED.lost : null)
+
   const handleSpokenInput = useCallback(
     async (transcript: string) => {
-      const time = new Date().toLocaleTimeString().slice(0, 5)
+      const time = clock()
       setLiveNotes((prev) => [...prev, `${time}: You (voice): ${transcript}`])
       try {
         const reply = await generateAgentMeetingResponse(transcript, activeCoPilotAgent, token)
@@ -299,7 +313,7 @@ export function Meet() {
     const q = agentQuestion.trim()
     if (!q) return
     setAgentQuestion('')
-    const time = new Date().toLocaleTimeString().slice(0, 5)
+    const time = clock()
     setLiveNotes((prev) => [...prev, `${time}: You: ${q}`])
     try {
       const reply = await generateAgentMeetingResponse(q, activeCoPilotAgent, token)
@@ -409,8 +423,10 @@ export function Meet() {
               variant="destructive"
               onClick={() => {
                 stopAgentSpeech()
-                // Leaving the call hangs up the hands-free conversation with it.
+                // Leaving the call hangs up the hands-free conversation and
+                // settles the transcript with it.
                 if (handsFree.open) handsFree.toggle()
+                if (transcriber.open) transcriber.toggle()
                 setActiveMeetingRoom(null)
               }}
             >
@@ -682,10 +698,30 @@ export function Meet() {
                   <Mic size={14} color={handsFree.open ? 'var(--state-success)' : 'currentColor'} />
                   {handsFree.open ? 'Hands-Free On' : 'Hands-Free'}
                 </Button>
+
+                <Button
+                  size="sm"
+                  variant={transcriber.open ? 'secondary' : 'default'}
+                  data-testid="live-transcript-toggle"
+                  data-state={transcriber.state}
+                  data-refusal={transcriber.refusal ? transcriber.refusal.service : undefined}
+                  aria-pressed={transcriber.open}
+                  disabled={!!transcriber.blocked}
+                  title={transcriberNote ?? (transcriber.open ? 'Transcribing — click to stop' : 'Transcribe what is said into the notes')}
+                  onClick={transcriber.toggle}
+                >
+                  <Captions size={14} color={transcriber.open ? 'var(--state-success)' : 'currentColor'} />
+                  {transcriber.open ? 'Transcribing' : 'Transcribe'}
+                </Button>
               </XStack>
               {handsFreeNote ? (
                 <Text fontSize="$1" color="$soft" role="status">
                   {handsFreeNote}
+                </Text>
+              ) : null}
+              {transcriberNote ? (
+                <Text fontSize="$1" color="$soft" role="status">
+                  {transcriberNote}
                 </Text>
               ) : null}
 
@@ -713,6 +749,11 @@ export function Meet() {
                     {note}
                   </Text>
                 ))}
+                {transcriber.open && caption ? (
+                  <Text data-testid="live-caption" fontSize="$1" color="$soft" lineHeight={16.5} aria-live="polite">
+                    {caption}
+                  </Text>
+                ) : null}
               </YStack>
 
               {/* Ask Agent Question during Call */}
@@ -753,7 +794,7 @@ export function Meet() {
                     const note = agentQuestion.trim()
                     if (!note) return
                     setAgentQuestion('')
-                    setLiveNotes((prev) => [...prev, `${new Date().toLocaleTimeString().slice(0, 5)}: You (note): ${note}`])
+                    setLiveNotes((prev) => [...prev, `${clock()}: You (note): ${note}`])
                   }}
                 >
                   + Add Live Note
@@ -1166,4 +1207,9 @@ export function Meet() {
       )}
     </YStack>
   )
+}
+
+/** A note's time, as the reader's clock shows it: 4:22 PM, never "4:22:". */
+function clock(): string {
+  return new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 }

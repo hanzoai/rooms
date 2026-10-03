@@ -60,8 +60,8 @@ import { Meters } from "./meters";
 import { useHydrated } from "./lib/hydrated";
 import { base, served } from "./lib/ai";
 import { onServed, type Served } from "./lib/served";
-import { speech, useVoice, Voice } from "@hanzo/voice";
-import { ArrowUp, Image as ImageMark, Mic, Paperclip, Square, Star, PanelRight, X } from "lucide-react";
+import { REFUSED, speech, useDictation, useTalk, useVoice, Voice } from "@hanzo/voice";
+import { ArrowUp, AudioLines, Image as ImageMark, Mic, Paperclip, Square, Star, PanelRight, X } from "lucide-react";
 import { ENSO, FREE } from "./lib/ai";
 import { openThread, showSettings, useOpen } from "./open";
 import { Beside, Framed } from "./Shell";
@@ -719,18 +719,22 @@ function Thread({
   useSeed(initial, setDraft);
 
   // DICTATION through Hanzo's own ear: the mic records and each pause is
-  // posted to /v1/audio/transcriptions (`zen-scribe`). `speech()` defaults to
-  // the Hanzo gateway and `base()` is the one place a host is read from, so
-  // pointing a local cloud at one points both. The token is the reader's own —
-  // the package never invents a credential — and a refusal is worn by
-  // `<Voice/>`, never passed off as a transcript.
+  // posted to /v1/audio/transcriptions (`zen-scribe`), and what was said lands
+  // AFTER what the draft already held (`useDictation`) — a pause between two
+  // sentences never loses the first. `speech()` defaults to the Hanzo gateway
+  // and `base()` is the one place a host is read from, so pointing a local
+  // cloud at one points both. The token is the reader's own — the package never
+  // invents a credential — and a refusal is worn by `<Voice/>`, never passed off
+  // as a transcript.
   const { token } = useIamToken();
   const ear = useMemo(() => speech({ ...base(), ...(token ? { token } : {}) }), [token]);
-  const voice = useVoice({
-    speech: ear,
-    onPartial: setDraft,
-    onUtterance: setDraft,
-  });
+  const voice = useVoice({ speech: ear, ...useDictation(draft, setDraft) });
+
+  // TALK MODE: a hands-free conversation on Hanzo's realtime socket, /v1/voice.
+  // The mic streams up, the answer streams back as speech with its words in
+  // `talk.reply`, and talking over it stops it. Its own conversation, so its
+  // turns are drawn above the composer rather than posted into the thread.
+  const talk = useTalk({ ...base(), ...(token ? { token } : {}), org: org() ?? undefined });
 
   // WHILE THE MIC IS OPEN, A FINISHED REPLY IS READ ALOUD by the platform's
   // voice, through the conversation's own mouth so speaking over it stops it.
@@ -742,10 +746,11 @@ function Thread({
       const lastMsg = msgs[msgs.length - 1];
       if (lastMsg && lastMsg.role === "assistant" && typeof lastMsg.content === "string") {
         const parts = room.length > 1 ? speakers(lastMsg.content, room) : [{ who: withWhom, text: lastMsg.content }];
+        // A part spoken over ends the reading rather than handing on to the next.
         void (async () => {
           for (const part of parts) {
             const said = cleanForSpeech(part.text);
-            if (said) await voice.say(said, voiceOf(part.who ?? withWhom ?? undefined));
+            if (said && !(await voice.say(said, voiceOf(part.who ?? withWhom ?? undefined)))) break;
           }
         })();
       }
@@ -1566,7 +1571,7 @@ function Thread({
           // WHAT GOES WITH THE MESSAGE, above the frame: one chip a file, each
           // with its own remove, and the reason any file was refused.
           head:
-            files.length || turnedAway ? (
+            files.length || turnedAway || talk.open || talk.refusal ? (
               <YStack width="calc(100% - 32px)" maxW={`calc(${MEASURE} - 3rem)`} mx="auto" gap="$1.5">
                 {files.length ? (
                   <XStack gap="$1.5" flexWrap="wrap" role="list" aria-label="Attached files" data-slot="composer-attached">
@@ -1612,6 +1617,24 @@ function Thread({
                     {turnedAway}
                   </Text>
                 ) : null}
+                {/* TALK MODE'S OWN TURNS: what Hanzo is saying, or why it cannot. */}
+                {talk.open || talk.refusal ? (
+                  <Text
+                    role="status"
+                    aria-live="polite"
+                    data-slot="composer-talk-reply"
+                    fontSize="$2"
+                    color={talk.refusal ? BAD : "$soft"}
+                  >
+                    {talk.refusal
+                      ? REFUSED.lost
+                      : talk.reply
+                        ? `Hanzo: ${talk.reply}`
+                        : talk.state === "listening"
+                          ? "Listening — speak, and Hanzo answers aloud."
+                          : "Connecting…"}
+                  </Text>
+                ) : null}
               </YStack>
             ) : undefined,
           send: (
@@ -1624,13 +1647,26 @@ function Thread({
                 models={offered}
               />
               <Control asChild size={ROUND}>
-                <Voice voice={voice}>
+                <Voice voice={voice} says={{ idle: "Dictate", listening: "Dictating — click to stop" }}>
                   {(state) => (
                     <Mic
                       size={15}
                       fill={state === "idle" ? "none" : "currentColor"}
                     />
                   )}
+                </Voice>
+              </Control>
+              <Control asChild size={ROUND}>
+                <Voice
+                  voice={talk}
+                  data-slot="composer-talk"
+                  says={{
+                    idle: "Talk with Hanzo",
+                    listening: "In conversation — click to hang up",
+                    speaking: "Hanzo is speaking — talk to interrupt",
+                  }}
+                >
+                  {() => <AudioLines size={15} />}
                 </Voice>
               </Control>
               <Control
