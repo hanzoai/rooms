@@ -20,6 +20,8 @@ import { BAD } from './lib/mix'
 export function standing(f: WorkFile): string {
   switch (f.status) {
     case 'ready':
+      // Ready means read; while its vectors fill in, search by meaning grows.
+      if (f.stage === 'embed' && f.passages) return `Indexed · ${f.sections ?? 0} sections · vectors ${Math.floor(((f.embedded ?? 0) / f.passages) * 100)}%`
       return `Indexed · ${f.sections ?? 0} sections`
     case 'stored':
       return 'Kept, not indexed'

@@ -36,6 +36,7 @@ import { useAi } from './lib/ai'
 import { empty, useOpen } from './open'
 import { attach, channel } from './pane'
 import { useRooms } from './host'
+import { org } from './lib/session'
 import { Badge, Contents, Hits } from './Contents'
 import { weigh as size } from './lib/attach'
 import {
@@ -218,7 +219,10 @@ export function Drive() {
   const workspace = currentOrg?.displayName || currentOrg?.name || 'hanzo'
   // THE WORKSPACE'S BUCKET is the one named for the org: where a file put into a
   // chat lands (lib/files `workspace`), so it is where Drive opens.
-  const home = currentOrg?.name ? slug(currentOrg.name) : null
+  // The org is the one the chat uploads under (`org()`), read the same way, so
+  // the bucket a chat file landed in is the bucket Drive opens.
+  const scope = org() ?? currentOrg?.name ?? null
+  const home = scope ? slug(scope) : null
 
   const [navSection, setNavSection] = useState<NavSection>('my-drive')
   const [viewMode, setViewMode] = useState<ViewMode>('list')
@@ -311,7 +315,7 @@ export function Drive() {
         .then((list) => {
           if (!live) return
           setIndex(new Map(list.map((f) => [f.key, f])))
-          if (list.some((f) => !settled(f))) clock = setTimeout(pass, 4000)
+          if (list.some((f) => !settled(f) || f.stage === 'embed')) clock = setTimeout(pass, 4000)
         })
         .catch(() => {})
     void pass()
@@ -360,10 +364,10 @@ export function Drive() {
     (f: WorkFile) => {
       if (!client) return
       empty()
-      attach(channel({ room, thread: null, agent: null }), [f], { api: client, org: currentOrg?.name ?? null })
+      attach(channel({ room, thread: null, agent: null }), [f], { api: client, org: scope })
       router.push('/chat')
     },
-    [client, room, currentOrg, router],
+    [client, room, scope, router],
   )
 
   // WHAT IS AT THIS LEVEL. The store's listing takes `recursive`; passing
