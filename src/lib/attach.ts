@@ -1,90 +1,128 @@
 /**
- * Files that go with a chat message.
+ * Files that go with a chat message — by REFERENCE.
  *
- * @hanzo/ai's `send(text, images)` carries a picture as an `image_url` part the
- * model reads, and nothing else rides that wire, so a file goes one of two
- * ways: an image as a `data:` URI beside the words, a text file as its own
- * words after the message, fenced under its name. Any other kind is refused by
- * name, before anything is held.
+ * A file put into a conversation is uploaded to the org's workspace and indexed
+ * there (`lib/files`). The turn carries what NAMES it — id, name, type, size —
+ * and the passages read from it for the question, each citing
+ * file › section › ¶n. No byte of the file rides the chat request, so there is
+ * no size a file must stay under to go with a message.
  *
- * This module judges and reads a file; `pane.ts` holds what it admits, per
- * conversation, for the composer's chips and the column's Sources alike.
+ * The names and the passages travel in one block after the words. The block is
+ * what the model reads; `said` takes it back off for drawing, so a person sees
+ * their words and the files' chips, never the passages.
  */
 
 import type { MessagePart } from '@hanzo/ui/chat'
+import type { FileRef, Grounds } from './files'
 
-/** What a file contributes to a message once admitted. */
-export interface Admitted {
-  kind: 'image' | 'text'
-  /** A `data:` URI for an image, the words for a text file. */
-  data: string
+const OPEN = '<workspace-files>'
+const CLOSE = '</workspace-files>'
+
+/** The files a turn reads: those put into it, and those carried from earlier turns. */
+export interface Carried {
+  attached: FileRef[]
+  reused: FileRef[]
 }
 
-/** A file as it goes with a message. */
-export type Going = Admitted & { name: string }
-
-export const IMAGE_MAX = 8 * 1024 * 1024
-export const TEXT_MAX = 256 * 1024
-
-const TEXT_TYPE = /^(text\/|application\/(json|ld\+json|xml|x-yaml|yaml|toml|javascript|typescript|x-sh|sql|x-tex))/
-const TEXT_NAME =
-  /\.(md|mdx|txt|csv|tsv|json|jsonl|ya?ml|toml|xml|html?|css|scss|[cm]?[jt]sx?|py|go|rs|rb|java|kt|swift|c|cc|cpp|h|hpp|cs|php|sh|bash|zsh|sql|ini|env|log|tex|proto|graphql)$/i
-
-/** Which way a file goes with a message, or null when it cannot go. */
-export function kindOf(file: { name: string; type: string }): Admitted['kind'] | null {
-  if (file.type.startsWith('image/')) return 'image'
-  if (TEXT_TYPE.test(file.type) || TEXT_NAME.test(file.name)) return 'text'
-  return null
+/** A size as a person reads it. */
+export function weigh(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return ''
+  if (bytes < 1024) return `${bytes} B`
+  const units = ['KB', 'MB', 'GB', 'TB']
+  let n = bytes / 1024
+  let u = 0
+  while (n >= 1024 && u < units.length - 1) {
+    n /= 1024
+    u++
+  }
+  return `${n >= 10 ? Math.round(n) : n.toFixed(1)} ${units[u]}`
 }
 
-function read(file: File, as: 'url' | 'text'): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result ?? ''))
-    reader.onerror = () => reject(reader.error ?? new Error(`${file.name} could not be read.`))
-    if (as === 'url') reader.readAsDataURL(file)
-    else reader.readAsText(file)
-  })
+/** Text that cannot close the block it sits in. */
+const inert = (s: string): string => s.split(CLOSE).join('</workspace files>')
+
+/**
+ * The message as sent: the words, then one block naming the files and holding
+ * what was read from them for this question.
+ *
+ * `why` says why there are no passages, when there are none — still indexing,
+ * stored without indexing, or the read failed — so the model says so rather
+ * than answering as though it had read the files.
+ */
+export function compose(text: string, carried: Carried, grounds: Grounds | null, why?: string): string {
+  const words = text.trim()
+  const all = [...carried.attached, ...carried.reused]
+  if (!all.length) return words
+  const passages = grounds?.passages ?? []
+  const lines = [
+    OPEN,
+    JSON.stringify({ attached: carried.attached, reused: carried.reused }),
+    `The person's workspace holds these files: ${all.map((f) => `${f.name} (${f.type || 'file'}, ${weigh(f.size)})`).join('; ')}.`,
+  ]
+  if (passages.length) {
+    lines.push(
+      words
+        ? 'Answer from the passages below, read from those files for this question. Cite each claim with its number, like [1], and end with a Sources list giving each passage you cited as "[n] file › section › ¶n". If the passages do not answer the question, say what is missing.'
+        : 'The person sent these files without a question: say what each one is and what it covers, from the passages below, citing them like [1].',
+    )
+    passages.forEach((p, i) => {
+      lines.push('', `[${i + 1}] ${inert(p.cite)}`, inert(p.text.trim()))
+    })
+  } else {
+    lines.push(`No passages could be read from them${why ? ` (${why})` : ''}: say so, and answer only what you can without them.`)
+  }
+  lines.push(CLOSE)
+  const block = lines.join('\n')
+  return words ? `${words}\n\n${block}` : block
 }
 
-/** A file read for a message, or the sentence that says why it cannot go. */
-export async function admit(file: File): Promise<Admitted | string> {
-  const kind = kindOf(file)
-  if (!kind) return `${file.name}: only images and text files go with a message.`
-  const max = kind === 'image' ? IMAGE_MAX : TEXT_MAX
-  if (file.size > max) return `${file.name} is larger than ${kind === 'image' ? '8 MB' : '256 KB'}.`
+/** A turn read back: the words a person wrote, and the files it carried. */
+export interface Said {
+  text: string
+  carried: Carried | null
+  /** The citations the turn handed the model, numbered as it numbered them. */
+  cites: string[]
+}
+
+/** Takes the files block back off a turn, for drawing. */
+export function said(content: string): Said {
+  const at = content.startsWith(`${OPEN}\n`) ? 0 : content.lastIndexOf(`\n${OPEN}\n`)
+  if (at < 0) return { text: content, carried: null, cites: [] }
+  const start = content.indexOf(OPEN, at) + OPEN.length + 1
+  const end = content.indexOf(CLOSE, start)
+  const body = content.slice(start, end < 0 ? undefined : end)
+  const nl = body.indexOf('\n')
   try {
-    return { kind, data: await read(file, kind === 'image' ? 'url' : 'text') }
+    const head = JSON.parse(nl < 0 ? body : body.slice(0, nl)) as Partial<Carried>
+    const carried: Carried = {
+      attached: Array.isArray(head.attached) ? head.attached.filter(isRef) : [],
+      reused: Array.isArray(head.reused) ? head.reused.filter(isRef) : [],
+    }
+    const cites = [...body.matchAll(/^\[(\d+)\] (.+)$/gm)].map((m) => m[2])
+    return { text: content.slice(0, at).trimEnd(), carried, cites }
   } catch {
-    return `${file.name} could not be read.`
+    return { text: content, carried: null, cites: [] }
   }
 }
 
-/** A fence longer than any run of backticks inside the words, so they cannot close it. */
-function fence(words: string): string {
-  const longest = Math.max(0, ...(words.match(/`+/g) ?? []).map((run) => run.length))
-  return '`'.repeat(Math.max(3, longest + 1))
+function isRef(v: unknown): v is FileRef {
+  const r = v as FileRef
+  return !!r && typeof r.id === 'string' && typeof r.name === 'string'
 }
 
 /**
- * The message as sent: the words, then each text file fenced with its name as
- * the info string — the shape a model writes a file in, and the one the
- * column's Sources reads back out of the turn. With no words and no text file,
- * the images' names, so the turn says what it carries.
+ * Every file the conversation's turns have carried, once each, oldest first —
+ * what a later question in the same conversation reads again.
  */
-export function compose(text: string, files: readonly Going[]): string {
-  const blocks = files
-    .filter((f) => f.kind === 'text')
-    .map((f) => {
-      const f3 = fence(f.data)
-      return `${f3}${f.name}\n${f.data.replace(/\n$/, '')}\n${f3}`
-    })
-  const out = [text.trim(), ...blocks].filter(Boolean).join('\n\n')
-  return out || files.map((f) => f.name).join(', ')
+export function carriedIn(turns: readonly { role: string; content?: unknown }[]): FileRef[] {
+  const out = new Map<string, FileRef>()
+  for (const t of turns) {
+    if (t.role !== 'user' || typeof t.content !== 'string') continue
+    const c = said(t.content).carried
+    for (const f of [...(c?.attached ?? []), ...(c?.reused ?? [])]) if (!out.has(f.id)) out.set(f.id, f)
+  }
+  return [...out.values()]
 }
-
-/** The images of a message, as the URIs @hanzo/ai's `send` takes. */
-export const images = (files: readonly Going[]): string[] => files.filter((f) => f.kind === 'image').map((f) => f.data)
 
 /** A wire turn's parts — text and `image_url` — as the parts `@hanzo/ui/chat` draws. */
 export function partsOf(content: readonly unknown[]): MessagePart[] {

@@ -23,13 +23,14 @@
 // worse than no row, so they are held for the session and no longer.
 //
 // ONE WAY IN FOR A FILE. The composer's paperclip, a drop on the room, a paste
-// into the field and the column's `+` all call `hold`, so a file is judged by
-// one rule (`lib/attach`), shows as a chip over the field and a row under
-// Sources at once, and goes with the next message. Sending spends what is
-// held; from then on the turn itself is the record Sources reads.
+// into the field and the column's `+` all call `hold`, so a file goes up by one
+// road (`lib/files`: straight to the org's workspace, in parts when it is
+// large), shows as a chip over the field and a row under Sources at once, and
+// goes with the next message by reference. Sending spends what is held; from
+// then on the turn itself is the record Sources reads.
 
 import { useSyncExternalStore } from 'react'
-import { admit, type Admitted } from './lib/attach'
+import { chatKey, follow, pool, register, settled, upload, workspace, type Api, type WorkFile } from './lib/files'
 
 /** One open tab in the pane's browser. */
 export interface Leaf {
@@ -41,20 +42,35 @@ export interface Leaf {
 }
 
 /**
- * A file the reader put into this conversation from their own disk, read and
- * waiting to go with the next message.
+ * A file put into this conversation, on its way to the workspace or already
+ * there, waiting to go with the next message.
  *
  * `href` is an object URL and is the reason this is never written down — see
- * the note at the top. Everything else is read off the `File` itself, so a name
- * and a size here are the file system's, never a guess.
+ * the note at the top. A name and a size are the file system's, or the
+ * workspace file's, never a guess.
  */
-export interface Held extends Admitted {
+export interface Held {
   id: string
   name: string
   size: number
   /** The browser's type for it, or '' where it could not tell from the name. */
   type: string
+  /** An object URL over the bytes on this machine; '' for a file taken from Drive. */
   href: string
+  /** Sending its bytes, then the index's own word for how far it has got. */
+  state: 'uploading' | WorkFile['status']
+  /** The fraction of the bytes the store holds, while uploading. */
+  sent: number
+  /** The workspace file, once the upload landed and was registered. */
+  file?: WorkFile
+  /** Why it failed, in the reader's words. */
+  error?: string
+}
+
+/** What carries a file: the client that reaches the platform, and the org whose workspace it lands in. */
+export interface Via {
+  api: Api
+  org: string | null
 }
 
 /** Everything the column beside one conversation is holding. */
@@ -264,24 +280,123 @@ export function pin(key: string, on: boolean): void {
   edit(key, (was) => (was.pinned === on ? was : { ...was, pinned: on }))
 }
 
-/**
- * Takes files from the reader's disk into this conversation.
- *
- * Each is judged and read by `admit`; what is refused is said by name in
- * `refused` and nothing of it is held, so a chip never stands for a file that
- * cannot go.
- */
-export async function hold(key: string, files: readonly File[]): Promise<void> {
-  if (!files.length) return
-  const judged = await Promise.all(files.map(admit))
-  const taken: Held[] = []
-  const refused: string[] = []
-  judged.forEach((one, i) => {
-    const file = files[i]
-    if (typeof one === 'string') refused.push(one)
-    else taken.push({ id: mint('h'), name: file.name, size: file.size, type: file.type, href: URL.createObjectURL(file), ...one })
+// THE WORKSPACE FILES THIS DOCUMENT HAS SEEN, by id, as the index last said.
+// A chip over the field and a chip in a sent turn read one record, so a file
+// that finishes indexing after the message went shows ready in both.
+const files = new Map<string, WorkFile>()
+const fileListeners = new Set<() => void>()
+
+function know(f: WorkFile): void {
+  files.set(f.id, f)
+  for (const l of fileListeners) l()
+}
+
+/** The workspace file `id` as the index last said, or undefined until it has. */
+export function useWorkFile(id: string | undefined): WorkFile | undefined {
+  return useSyncExternalStore(
+    (l) => {
+      fileListeners.add(l)
+      return () => {
+        fileListeners.delete(l)
+      }
+    },
+    () => (id ? files.get(id) : undefined),
+    () => undefined,
+  )
+}
+
+// Each held file's upload, by held id: what stops it, and what it settles to.
+const carrying = new Map<string, { stop: AbortController; done: Promise<WorkFile | null> }>()
+
+/** How many files go up at once; each large one also sends several parts at once. */
+const FILES_AT_ONCE = 3
+
+function patch(key: string, id: string, fields: Partial<Held>): void {
+  edit(key, (was) => {
+    const at = was.held.findIndex((h) => h.id === id)
+    if (at < 0) return was
+    const held = was.held.slice()
+    held[at] = { ...held[at], ...fields }
+    return { ...was, held }
   })
-  edit(key, (was) => ({ ...was, held: [...was.held, ...taken], refused: refused.length ? refused.join(' ') : null }))
+}
+
+const fromFile = (f: WorkFile): Partial<Held> => ({ state: f.status, sent: 1, file: f, error: f.status === 'failed' || f.status === 'stored' ? f.error : undefined })
+
+/** Watches a workspace file until its ingest settles, keeping every chip that names it current. */
+function watch(api: Api, f: WorkFile, key?: string, id?: string): void {
+  know(f)
+  if (settled(f)) return
+  void follow(api, f.id, (seen) => {
+    know(seen)
+    if (key && id) patch(key, id, fromFile(seen))
+  }).catch(() => {})
+}
+
+/**
+ * Takes files into this conversation: each goes straight to the org's
+ * workspace — in parts when it is large, several at once — is registered with
+ * the index, and is followed through its stages. Nothing is refused for its
+ * size or its kind: a file the index cannot read is still kept, and says why.
+ */
+export async function hold(key: string, list: readonly File[], via: Via): Promise<void> {
+  if (!list.length) return
+  if (!via.org) {
+    edit(key, (was) => ({ ...was, refused: 'Sign in to attach files: they are kept in your workspace Drive.' }))
+    return
+  }
+  const org = via.org
+  const taken: Held[] = list.map((file) => ({
+    id: mint('h'),
+    name: file.name,
+    size: file.size,
+    type: file.type,
+    href: URL.createObjectURL(file),
+    state: 'uploading',
+    sent: 0,
+  }))
+  edit(key, (was) => ({ ...was, held: [...was.held, ...taken], refused: null }))
+  const jobs = taken.map((h, i) => {
+    const stop = new AbortController()
+    let land!: (f: WorkFile | null) => void
+    const done = new Promise<WorkFile | null>((r) => (land = r))
+    carrying.set(h.id, { stop, done })
+    return { h, file: list[i], stop, land }
+  })
+  await pool(jobs, FILES_AT_ONCE, async ({ h, file, stop, land }) => {
+    try {
+      if (stop.signal.aborted) return land(null)
+      const bucket = await workspace(via.api, org)
+      const objectKey = chatKey(file)
+      await upload(via.api, bucket, objectKey, file, (sent) => patch(key, h.id, { sent }), stop.signal)
+      const got = await register(via.api, bucket, objectKey)
+      patch(key, h.id, fromFile(got))
+      watch(via.api, got, key, h.id)
+      land(got)
+    } catch (e) {
+      if (!stop.signal.aborted) patch(key, h.id, { state: 'failed', error: (e as Error)?.message || `${file.name} did not upload.` })
+      land(null)
+    }
+  })
+}
+
+/**
+ * Puts files already in the workspace into this conversation — Drive's "Ask in
+ * chat". Nothing is uploaded; each is followed if its ingest has not settled.
+ */
+export function attach(key: string, list: readonly WorkFile[], via: Via): void {
+  const taken: Held[] = list.map((f) => ({ id: mint('h'), name: f.name, size: f.size, type: f.type, href: '', state: f.status, sent: 1, file: f }))
+  edit(key, (was) => ({ ...was, held: [...was.held.filter((h) => !list.some((f) => f.id === h.file?.id)), ...taken], refused: null }))
+  taken.forEach((h) => {
+    carrying.set(h.id, { stop: new AbortController(), done: Promise.resolve(h.file ?? null) })
+    if (h.file) watch(via.api, h.file, key, h.id)
+  })
+}
+
+/** The workspace file a held file became, once its upload settles; null when it did not. */
+export function landed(h: Held): Promise<WorkFile | null> {
+  if (h.file) return Promise.resolve(h.file)
+  return carrying.get(h.id)?.done ?? Promise.resolve(null)
 }
 
 /**
@@ -292,21 +407,21 @@ export async function hold(key: string, files: readonly File[]): Promise<void> {
  * `<input type=file>` parked in the tree is one more thing for a screen reader
  * to walk past.
  */
-export function take(key: string): void {
+export function take(key: string, via: Via): void {
   if (typeof document === 'undefined') return
   const ask = document.createElement('input')
   ask.type = 'file'
   ask.multiple = true
-  ask.onchange = () => void hold(key, Array.from(ask.files ?? []))
+  ask.onchange = () => void hold(key, Array.from(ask.files ?? []), via)
   ask.click()
 }
 
 /**
  * Hands over everything held to go with a message, and lets go of it.
  *
- * The turn carries each file from here — an image as its `data:` URI, a text
- * file as its words. The object URLs are left standing, so a tab already open
- * on one keeps showing it.
+ * The turn carries each file by reference from here. The object URLs are left
+ * standing, so a tab already open on one keeps showing it, and an upload still
+ * running keeps running: the turn names the file it lands as.
  */
 export function spend(key: string): Held[] {
   const was = read(key)
@@ -315,12 +430,14 @@ export function spend(key: string): Held[] {
   return was.held
 }
 
-/** Lets go of a file, and of the handle the browser minted for it. */
+/** Lets go of a file: stops its upload if it is still going, and drops the handle the browser minted. */
 export function drop(key: string, id: string): void {
   edit(key, (was) => {
     const going = was.held.find((h) => h.id === id)
     if (!going) return was
-    URL.revokeObjectURL(going.href)
+    carrying.get(id)?.stop.abort()
+    carrying.delete(id)
+    if (going.href) URL.revokeObjectURL(going.href)
     return { ...was, held: was.held.filter((h) => h.id !== id) }
   })
 }

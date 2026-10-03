@@ -56,8 +56,11 @@ import {
   XStack,
   YStack,
 } from '@hanzo/ui'
-import type { ChatMessage } from '@hanzo/ai/react'
+import { useAi, type ChatMessage } from '@hanzo/ai/react'
 import { Card, Quiet, Row } from './card'
+import { said as told } from './lib/attach'
+import { download, fileOf, type Api } from './lib/files'
+import { org } from './lib/session'
 import { useOpen } from './open'
 import {
   address,
@@ -93,6 +96,8 @@ interface Mark {
   body?: string
   /** The type a blob should carry, so a browser renders it rather than downloads it. */
   mime?: string
+  /** A workspace file's id: it opens through a signed address minted when it is looked at. */
+  file?: string
 }
 
 /** Fenced blocks, as a model writes them. The info string is whatever followed
@@ -159,8 +164,13 @@ function outputs(said: ChatMessage[]): Mark[] {
   const out: Mark[] = []
   said.forEach((m, turn) => {
     if (m.role !== 'assistant') return
+    // Files a turn carried by reference: their names in the turn, their bytes in the workspace.
+    const read = told(words(m))
+    for (const f of read.carried?.attached ?? []) {
+      out.push({ id: `sw${turn}.${f.id}`, name: f.name, kind: f.type.startsWith('image/') ? 'image' : 'file', file: f.id, mime: f.type })
+    }
     let n = 0
-    for (const [, info, body] of words(m).matchAll(FENCE)) {
+    for (const [, info, body] of read.text.matchAll(FENCE)) {
       n += 1
       const named = fenceName(info, n)
       out.push({
@@ -199,7 +209,7 @@ function sources(said: ChatMessage[], held: Held[]): Mark[] {
     }
   })
   for (const h of held) {
-    out.push({ id: h.id, name: h.name, kind: h.kind === 'image' ? 'image' : 'file', href: h.href, mime: h.type })
+    out.push({ id: h.id, name: h.name, kind: h.type.startsWith('image/') ? 'image' : 'file', href: h.href || undefined, file: h.file?.id, mime: h.type })
   }
   return out
 }
@@ -294,6 +304,7 @@ function Marks({
   /** What to say when there are none. */
   children: ReactNode
 }) {
+  const ai = useAi()
   const [all, setAll] = useState(false)
   const shown = all ? marks : marks.slice(0, FEW)
   const rest = marks.length - shown.length
@@ -304,7 +315,7 @@ function Marks({
       {shown.map((m) => {
         const Mark = GLYPH[m.kind]
         return (
-          <Row key={m.id} icon={<Mark size={16} aria-hidden />} onPress={() => look(at, m)}>
+          <Row key={m.id} icon={<Mark size={16} aria-hidden />} onPress={() => void look(at, m, ai)}>
             {m.name}
           </Row>
         )
@@ -327,7 +338,16 @@ function Marks({
  * `index.html` something you can actually see rather than something you can
  * only read the source of.
  */
-function look(at: string, m: Mark): void {
+async function look(at: string, m: Mark, api: Api): Promise<void> {
+  if (!m.href && m.file) {
+    try {
+      const f = await fileOf(api, m.file)
+      openTab(at, await download(api, f.bucket, f.key), m.name)
+    } catch {
+      // A file forgotten or a store unreachable opens nothing; the row stays.
+    }
+    return
+  }
   const href = m.href ?? (m.body === undefined ? null : URL.createObjectURL(new Blob([m.body], { type: m.mime })))
   if (!href) return
   openTab(at, href, m.name)
@@ -383,6 +403,7 @@ const Note = ({ children }: { children: ReactNode }) => (
  * and they put a skill one press away instead of two.
  */
 function Add({ at }: { at: string }) {
+  const ai = useAi()
   return (
     <DropdownMenu placement="bottom-end" maxHeight={420}>
       <DropdownMenuTrigger asChild>
@@ -397,7 +418,7 @@ function Add({ at }: { at: string }) {
         </Box>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => take(at)}>
+        <DropdownMenuItem onClick={() => take(at, { api: ai, org: org() })}>
           <Word>Attach files</Word>
         </DropdownMenuItem>
         <DropdownMenuSeparator />

@@ -45,8 +45,9 @@ import {
   isFree,
 } from "@hanzo/ai";
 import { ASK, Chat as ChatSurface, Code, Failure, Parts, words, type Said } from "@hanzo/ui/chat";
-import { compose, images, partsOf } from "./lib/attach";
-import { channel, drop, hold, spend, take, usePane } from "./pane";
+import { carriedIn, compose, partsOf, said as told, weigh } from "./lib/attach";
+import { dropped, readable, refOf, retrieve, type FileRef, type WorkFile } from "./lib/files";
+import { channel, drop, hold, landed, spend, take, usePane, useWorkFile, type Held, type Via } from "./pane";
 import { Face, brief as roomBrief, join, roleOf, roomTurn, roster as rosterLine, rosterOf, speakers, speaksOf, voiceOf } from "./cast";
 import { SpeakButton, cleanForSpeech } from "./speech";
 import { Crew, HOUSE, useCrew } from "./crew";
@@ -370,6 +371,148 @@ function Why({ text }: { text: string }) {
  * writes, which streams no words while it does.
  */
 const STALL = 300_000;
+
+/**
+ * How long a send waits for a freshly attached file to have passages before it
+ * goes without them. Long enough for a page or a short document to be read; a
+ * large one keeps indexing, and the turn says it is not readable yet.
+ */
+const READ_WAIT = 45_000;
+
+/** Files named the way a sentence lists them. */
+function names(list: readonly { name: string }[]): string {
+  const all = list.map((f) => f.name);
+  return all.length <= 2 ? all.join(" and ") : `${all.slice(0, 2).join(", ")} and ${all.length - 2} more`;
+}
+
+/** Why the files had no passages to give, from what the index last said of each. */
+function unread(list: readonly WorkFile[]): string | undefined {
+  const parts = list.map((f) =>
+    f.status === "stored"
+      ? `${f.name} is kept but not indexed${f.error ? `: ${f.error}` : ""}`
+      : f.status === "failed"
+        ? `${f.name} could not be indexed${f.error ? `: ${f.error}` : ""}`
+        : f.status !== "ready"
+          ? `${f.name} is still being indexed`
+          : null,
+  );
+  const said = parts.filter(Boolean).join("; ");
+  return said || undefined;
+}
+
+/** How far a file has got, in a word or two. */
+function progress(state: Held["state"], sent: number, f: WorkFile | undefined): string {
+  if (state === "uploading") return `${Math.floor(sent * 100)}%`;
+  if (state === "queued") return "queued";
+  if (state === "indexing") {
+    switch (f?.stage) {
+      case "extract":
+        return "reading";
+      case "toc":
+        return "contents";
+      case "passages":
+        return "passages";
+      case "embed":
+        return f.passages ? `indexing ${Math.floor(((f.embedded ?? 0) / f.passages) * 100)}%` : "indexing";
+      case "graph":
+        return "linking";
+      default:
+        return "indexing";
+    }
+  }
+  return state;
+}
+
+/** One chip: the file's glyph, its name, and how far it has got. */
+function Chip({
+  name,
+  type,
+  state,
+  sent,
+  file,
+  onRemove,
+}: {
+  name: string;
+  type: string;
+  state: Held["state"];
+  sent: number;
+  file?: WorkFile;
+  onRemove?: () => void;
+}) {
+  const bad = state === "failed";
+  const why = state === "failed" || state === "stored" ? file?.error : undefined;
+  return (
+    <XStack
+      role="listitem"
+      items="center"
+      gap="$1.5"
+      pl="$2.5"
+      pr={onRemove ? "$1" : "$2.5"}
+      py="$1"
+      rounded="$10"
+      borderWidth={1}
+      borderColor="$borderColor"
+      bg="$hover"
+      maxW={320}
+      data-slot="file-chip"
+      data-state={state}
+      data-stage={file?.stage ?? ""}
+      {...(why ? ({ title: why } as object) : null)}
+    >
+      {type.startsWith("image/") ? (
+        <ImageMark size={12} aria-hidden color="var(--muted-foreground)" />
+      ) : (
+        <Paperclip size={12} aria-hidden color="var(--muted-foreground)" />
+      )}
+      <Text fontSize="$2" color="$ink" numberOfLines={1}>
+        {name}
+      </Text>
+      <Text fontSize="$1" color={bad ? BAD : "$soft"} numberOfLines={1} shrink={0}>
+        {progress(state, sent, file)}
+      </Text>
+      {onRemove ? (
+        <Box render="button" aria-label={`Remove ${name}`} onClick={onRemove} p="$1" rounded="$10" hoverStyle={{ bg: "$raised" }}>
+          <X size={12} aria-hidden />
+        </Box>
+      ) : null}
+    </XStack>
+  );
+}
+
+/** A file held for the next message: uploading, then indexing, then ready. */
+function HeldChip({ one, onRemove }: { one: Held; onRemove: () => void }) {
+  const live = useWorkFile(one.file?.id);
+  const file = live ?? one.file;
+  const state = one.state === "uploading" ? one.state : (file?.status ?? one.state);
+  return <Chip name={one.name} type={one.type} state={state} sent={one.sent} file={file ?? (one.error ? ({ error: one.error } as WorkFile) : undefined)} onRemove={onRemove} />;
+}
+
+/** A file a sent turn carried, as the index says of it now. */
+function TurnChip({ f }: { f: FileRef }) {
+  const live = useWorkFile(f.id);
+  return <Chip name={f.name} type={f.type} state={live?.status ?? "ready"} sent={1} file={live} />;
+}
+
+/** A question that carried files: its words, the files put into it, and those read again. */
+function Carried({ text, attached, reused }: { text: string; attached: FileRef[]; reused: FileRef[] }) {
+  return (
+    <YStack gap="$1.5" data-slot="turn-files">
+      {text ? <Prose text={text} /> : null}
+      {attached.length ? (
+        <XStack gap="$1.5" flexWrap="wrap" role="list" aria-label="Files in this message">
+          {attached.map((f) => (
+            <TurnChip key={f.id} f={f} />
+          ))}
+        </XStack>
+      ) : null}
+      {reused.length ? (
+        <Text fontSize="$1" color="$soft">
+          Read again: {reused.map((f) => `${f.name} (${weigh(f.size)})`).join(", ")}
+        </Text>
+      ) : null}
+    </YStack>
+  );
+}
 
 /**
  * The conversation. One component for a visitor and for an account.
@@ -698,9 +841,7 @@ function Thread({
   // identity changes on every `setMessages` — `useChat` closes over `messages` —
   // so an effect depending on it re-runs after each streamed token.
   const latest = useRef(send);
-  // The images held for a turn ride with it at the moment it is sent, queued or
-  // not, and are spent once: a retry is the words again, not the pictures.
-  latest.current = (text: string) => send(text, outgoing.current.splice(0));
+  latest.current = (text: string) => send(text);
 
   // THE COMPOSER'S DRAFT IS HELD HERE, so an arriving question can be typed into
   // it. `Chat` owns a draft of its own and spreads `composer` after it, so
@@ -710,11 +851,15 @@ function Thread({
   // FILES WITH THE NEXT MESSAGE, held by `pane.ts` for this conversation: the
   // paperclip, a drop anywhere on the room, a paste into the field and the
   // column's `+` all go through its one `hold`, so the chips here and the rows
-  // under Sources are one list. An image rides as a picture the model reads, a
-  // text file as its words (lib/attach); anything else is refused by name.
+  // under Sources are one list. Each goes to the org's workspace and is indexed
+  // there; the turn carries it by reference (lib/attach), with the passages
+  // read from it for the question.
   const { held: files, refused: turnedAway } = usePane(at);
+  const via = useMemo<Via>(() => ({ api: ai, org: anonymous ? null : org() }), [ai, anonymous]);
+  // What the send is waiting on — uploads landing, the files being read — said
+  // over the field, and the reason a second press does nothing meanwhile.
+  const [preparing, setPreparing] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
-  const outgoing = useRef<string[]>([]);
   const depth = useRef(0);
   useSeed(initial, setDraft);
 
@@ -911,14 +1056,56 @@ function Thread({
     [model, speak],
   );
 
-  /** The draft and the held files, sent as one turn. */
+  /**
+   * The draft and the files, sent as one turn.
+   *
+   * A file goes by REFERENCE: the send waits for each held file's upload to
+   * land, then asks the index for the passages that answer the question —
+   * across the files put into this turn and every file earlier turns carried —
+   * and the turn carries their names and those passages, each citing
+   * file › section › ¶n. A file still indexing is waited on for a bounded
+   * while; past it the turn says the file is not readable yet rather than
+   * answering as though it had been read.
+   */
   const submit = () => {
     const text = draft.trim();
-    if (!text && !files.length) return;
-    const going = spend(at);
-    outgoing.current = images(going);
+    if (preparing || (!text && !files.length)) return;
+    const holding = files.slice();
+    const earlier = carriedIn(chat.messages);
+    if (!holding.length && !earlier.length) {
+      setDraft("");
+      guarded(text);
+      return;
+    }
     setDraft("");
-    guarded(compose(text, going));
+    void (async () => {
+      try {
+        if (holding.some((h) => !h.file)) setPreparing(`Uploading ${names(holding)}`);
+        const landedFiles = (await Promise.all(holding.map(landed))).filter((f): f is WorkFile => !!f);
+        spend(at);
+        const attached = landedFiles.map(refOf);
+        const reused = earlier.filter((f) => !attached.some((a) => a.id === f.id));
+        const all = [...attached, ...reused];
+        if (!all.length) {
+          if (text) guarded(text);
+          else setDraft(text);
+          return;
+        }
+        setPreparing(`Reading ${names(all)}`);
+        const now = await readable(ai, landedFiles, READ_WAIT);
+        let grounds = null;
+        let why: string | undefined;
+        try {
+          grounds = await retrieve(ai, text || `What is in ${names(all)}?`, all.map((f) => f.id), 8);
+        } catch {
+          why = "the workspace could not be read just now";
+        }
+        if (!grounds?.passages.length) why = why ?? unread(now);
+        guarded(compose(text, { attached, reused }, grounds, why));
+      } finally {
+        setPreparing(null);
+      }
+    })();
   };
 
   /*
@@ -1081,7 +1268,8 @@ function Thread({
         setDragging(false);
         if (!e.dataTransfer.files?.length) return;
         e.preventDefault();
-        void hold(at, Array.from(e.dataTransfer.files));
+        // A dropped folder arrives as entries; each file under it goes up with its path.
+        void dropped(e.dataTransfer).then((list) => hold(at, list, via));
       }}
     >
       {dragging ? (
@@ -1296,6 +1484,12 @@ function Thread({
           if (turn.role === "user" && Array.isArray(turn.content))
             return <Parts parts={partsOf(turn.content)} prose={(text) => <Prose text={text} />} />;
           const said = typeof turn.content === "string" ? turn.content : "";
+          // A QUESTION THAT CARRIED FILES draws its words and the files' chips;
+          // the passages it handed the model are the model's to read, not ours.
+          if (turn.role === "user" && said) {
+            const read = told(said);
+            if (read.carried) return <Carried text={read.text} attached={read.carried.attached} reused={read.carried.reused} />;
+          }
           // WHO IS ANSWERING, while the answer has no words yet: the agents the
           // question addresses, or the whole room when it names nobody.
           if (turn.role === "assistant" && !said && chat.streaming && room.length) {
@@ -1550,7 +1744,7 @@ function Thread({
           children: (
             <Tooltip>
               <TooltipTrigger>
-                <Control type="button" size={ROUND} aria-label="Attach files" onClick={() => take(at)}>
+                <Control type="button" size={ROUND} aria-label="Attach files" onClick={() => take(at, via)}>
                   <Paperclip size={15} aria-hidden />
                 </Control>
               </TooltipTrigger>
@@ -1565,52 +1759,25 @@ function Thread({
             onPaste: (e: React.ClipboardEvent) => {
               if (!e.clipboardData?.files?.length) return;
               e.preventDefault();
-              void hold(at, Array.from(e.clipboardData.files));
+              void hold(at, Array.from(e.clipboardData.files), via);
             },
           },
           // WHAT GOES WITH THE MESSAGE, above the frame: one chip a file, each
           // with its own remove, and the reason any file was refused.
           head:
-            files.length || turnedAway || talk.open || talk.refusal ? (
+            files.length || turnedAway || preparing || talk.open || talk.refusal ? (
               <YStack width="calc(100% - 32px)" maxW={`calc(${MEASURE} - 3rem)`} mx="auto" gap="$1.5">
                 {files.length ? (
                   <XStack gap="$1.5" flexWrap="wrap" role="list" aria-label="Attached files" data-slot="composer-attached">
                     {files.map((one) => (
-                      <XStack
-                        key={one.id}
-                        role="listitem"
-                        items="center"
-                        gap="$1.5"
-                        pl="$2.5"
-                        pr="$1"
-                        py="$1"
-                        rounded="$10"
-                        borderWidth={1}
-                        borderColor="$borderColor"
-                        bg="$hover"
-                        maxW={260}
-                      >
-                        {one.kind === "image" ? (
-                          <ImageMark size={12} aria-hidden color="var(--muted-foreground)" />
-                        ) : (
-                          <Paperclip size={12} aria-hidden color="var(--muted-foreground)" />
-                        )}
-                        <Text fontSize="$2" color="$ink" numberOfLines={1}>
-                          {one.name}
-                        </Text>
-                        <Box
-                          render="button"
-                          aria-label={`Remove ${one.name}`}
-                          onClick={() => drop(at, one.id)}
-                          p="$1"
-                          rounded="$10"
-                          hoverStyle={{ bg: "$raised" }}
-                        >
-                          <X size={12} aria-hidden />
-                        </Box>
-                      </XStack>
+                      <HeldChip key={one.id} one={one} onRemove={() => drop(at, one.id)} />
                     ))}
                   </XStack>
+                ) : null}
+                {preparing ? (
+                  <Text role="status" aria-live="polite" data-slot="composer-preparing" fontSize="$2" color="$soft">
+                    {preparing}…
+                  </Text>
                 ) : null}
                 {turnedAway ? (
                   <Text role="alert" fontSize="$2" color={BAD}>

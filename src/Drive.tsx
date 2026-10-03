@@ -19,6 +19,8 @@ import {
   FolderInput,
   FolderPlus,
   HardDrive,
+  ListTree,
+  MessageSquare,
   LayoutGrid,
   List,
   MoreHorizontal,
@@ -31,7 +33,24 @@ import {
 import { Box, Button, Text, View, XStack, YStack } from '@hanzo/ui'
 import { useIam, useOrganizations } from '@hanzo/iam/react'
 import { useAi } from './lib/ai'
-import { useOpen } from './open'
+import { empty, useOpen } from './open'
+import { attach, channel } from './pane'
+import { useRooms } from './host'
+import { Badge, Contents, Hits } from './Contents'
+import { weigh as size } from './lib/attach'
+import {
+  dropped,
+  filesIn,
+  forget,
+  pool,
+  register,
+  search,
+  settled,
+  slug,
+  upload,
+  type Passage,
+  type WorkFile,
+} from './lib/files'
 import { checkoutUrl } from './lib/pay'
 import { BAD, mix } from './lib/mix'
 
@@ -68,14 +87,8 @@ const blame = (e: unknown): string => {
   return text || 'The store did not say what went wrong.'
 }
 
-/** Format byte count nicely */
-const weigh = (bytes: number): string => {
-  if (!bytes) return '—'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  const step = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
-  const size = bytes / 1024 ** step
-  return `${size < 10 && step > 0 ? size.toFixed(1) : Math.round(size)} ${units[step]}`
-}
+/** A size as a row shows it; nothing is a dash. */
+const weigh = (bytes: number): string => (bytes ? size(bytes) : '—')
 
 /** Format timestamp */
 const when = (stamp: number): string => {
@@ -92,13 +105,6 @@ const when = (stamp: number): string => {
 /** The store publishes a bucket's own display name; the slug is the fallback. */
 const getBucketDisplayName = (b: Bucket | string | undefined): string =>
   (typeof b === 'string' ? b : b?.displayName || b?.name) || 'Drive'
-
-const bucketName = (workspace: string): string =>
-  workspace
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40) || 'hanzo'
 
 const wire = (key: string): string => key.split('/').map(encodeURIComponent).join('/')
 const objects = (bucket: string): string => `/v1/s3/buckets/${encodeURIComponent(bucket)}/objects`
@@ -206,9 +212,13 @@ export function Drive() {
   const { client } = useAi()
   const { user, isAuthenticated } = useIam()
   const ready = Boolean(client && isAuthenticated)
-  const { bucket, openBucket } = useOpen()
+  const { bucket, openBucket, room } = useOpen()
+  const { router } = useRooms()
   const { currentOrg } = useOrganizations()
   const workspace = currentOrg?.displayName || currentOrg?.name || 'hanzo'
+  // THE WORKSPACE'S BUCKET is the one named for the org: where a file put into a
+  // chat lands (lib/files `workspace`), so it is where Drive opens.
+  const home = currentOrg?.name ? slug(currentOrg.name) : null
 
   const [navSection, setNavSection] = useState<NavSection>('my-drive')
   const [viewMode, setViewMode] = useState<ViewMode>('list')
@@ -230,6 +240,12 @@ export function Drive() {
   // What the drive actually holds, measured. There is no quota route, so there
   // is no quota drawn: a number nobody publishes would be a number invented.
   const [usage, setUsage] = useState<{ bytes: number; files: number; capped: boolean } | null>(null)
+  // WHAT THE INDEX SAYS of each object in the open bucket, by key: queued,
+  // indexing (and which stage), ready, kept-not-indexed or failed.
+  const [index, setIndex] = useState<Map<string, WorkFile>>(() => new Map())
+  // A search's passages, and the file whose contents are open beside the list.
+  const [hits, setHits] = useState<Passage[] | null>(null)
+  const [contents, setContents] = useState<{ file: WorkFile; at?: number } | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const folderInputRef = useRef<HTMLInputElement | null>(null)
@@ -270,15 +286,85 @@ export function Drive() {
   // THE DRIVE IS A BUCKET THE ORG OWNS. It used to fall back to the literal
   // "my-drive", which is a nav label rather than a name the store answers to —
   // so every read 404'd and every write went nowhere.
-  const activeBucket = bucket || buckets?.[0]?.name || null
+  const landing = (home && buckets?.some((b) => b.name === home) ? home : buckets?.[0]?.name) || null
+  const activeBucket = bucket || landing
 
   // YOU LAND IN THE DRIVE, not in a chooser. The root view lists buckets and
   // projects, and the toolbar's verbs all act on an OPEN bucket — so opening
   // the org's first one is what makes New, upload and the listing agree about
   // where they are. It is also what a drive does: the files, on arrival.
   useEffect(() => {
-    if (!bucket && buckets && buckets.length > 0) openBucket(buckets[0].name)
-  }, [bucket, buckets, openBucket])
+    if (!bucket && landing) openBucket(landing)
+  }, [bucket, landing, openBucket])
+
+  // THE INDEX'S WORD on this bucket's files, read again every few seconds while
+  // any of them is still moving through its stages.
+  useEffect(() => {
+    if (!ready || !client || !activeBucket) {
+      setIndex(new Map())
+      return
+    }
+    let live = true
+    let clock: ReturnType<typeof setTimeout> | undefined
+    const pass = () =>
+      filesIn(client, activeBucket)
+        .then((list) => {
+          if (!live) return
+          setIndex(new Map(list.map((f) => [f.key, f])))
+          if (list.some((f) => !settled(f))) clock = setTimeout(pass, 4000)
+        })
+        .catch(() => {})
+    void pass()
+    return () => {
+      live = false
+      if (clock) clearTimeout(clock)
+    }
+  }, [ready, client, activeBucket, reload])
+
+  // SEARCH READS THE FILES, not just their names: three characters or more ask
+  // the index for the passages that match, beside the name filter.
+  useEffect(() => {
+    const q = searchQuery.trim()
+    if (!ready || !client || q.length < 3) {
+      setHits(null)
+      return
+    }
+    let live = true
+    const clock = setTimeout(() => {
+      search(client, q, 12)
+        .then((out) => live && setHits(out.passages ?? []))
+        .catch(() => live && setHits([]))
+    }, 400)
+    return () => {
+      live = false
+      clearTimeout(clock)
+    }
+  }, [ready, client, searchQuery])
+
+  /** Opens a file's contents beside the list, at a section when one is named. */
+  const showContents = useCallback(
+    (id: string, at?: number) => {
+      const known = [...index.values()].find((f) => f.id === id)
+      if (known) return setContents({ file: known, at })
+      if (!client) return
+      void client.http
+        .json<WorkFile>({ path: `/v1/knowledge/files/${encodeURIComponent(id)}` })
+        .then((f) => setContents({ file: f, at }))
+        .catch((e) => setFailed(blame(e)))
+    },
+    [index, client],
+  )
+
+  /** ASK IN CHAT: a new conversation with the file put into it, by reference. */
+  const askInChat = useCallback(
+    (f: WorkFile) => {
+      if (!client) return
+      empty()
+      attach(channel({ room, thread: null, agent: null }), [f], { api: client, org: currentOrg?.name ?? null })
+      router.push('/chat')
+    },
+    [client, room, currentOrg, router],
+  )
 
   // WHAT IS AT THIS LEVEL. The store's listing takes `recursive`; passing
   // `delimiter` (S3's own word) is silently ignored, so a flat listing came
@@ -346,20 +432,29 @@ export function Drive() {
     [client, activeBucket, busy],
   )
 
-  // UPLOAD is two calls and the bytes skip the platform: mint a presigned PUT,
-  // then send the file straight to the store. A PUT at the object's own address
-  // is not a route the platform has — that address mints URLs and deletes.
+  // UPLOAD skips the platform: the bytes go straight to the store through
+  // presigned PUTs — one for a small file, one per 16 MB part for a large one,
+  // resumed from the parts the store holds when a connection drops — several
+  // files at once. Each lands as a workspace file: registered with the index,
+  // which reads it into contents, passages and links.
   const handleUpload = useCallback(
     (files: FileList | File[] | null) => {
       if (!files) return
       const list = Array.from(files)
       if (!list.length || !client || !activeBucket) return
-      void run(`Uploading ${list[0].name}`, async (say) => {
-        for (const file of list) {
-          say(`Uploading ${file.name}`)
-          const name = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name
-          await putBytes(client, activeBucket, `${prefix}${name}`, file, file.type || undefined)
-        }
+      void run(`Uploading ${list.length === 1 ? list[0].name : `${list.length} files`}`, async (say) => {
+        const sent = new Map<File, number>()
+        const total = list.reduce((n, f) => n + f.size, 0) || 1
+        const tell = () => say(`Uploading ${list.length === 1 ? list[0].name : `${list.length} files`} — ${Math.floor(([...sent.values()].reduce((a, b) => a + b, 0) / total) * 100)}%`)
+        await pool(list, 3, async (file) => {
+          const f = file as File & { webkitRelativePath?: string; relative?: string }
+          const key = `${prefix}${f.relative || f.webkitRelativePath || file.name}`
+          await upload(client, activeBucket, key, file, (fraction) => {
+            sent.set(file, fraction * file.size)
+            tell()
+          })
+          await register(client, activeBucket, key)
+        })
       })
     },
     [client, activeBucket, prefix, run],
@@ -397,18 +492,27 @@ export function Drive() {
     (entry: Entry) => {
       if (!client || !activeBucket) return
       const key = `${prefix}${entry.key}`
+      // A deleted file leaves the index too, so search and chat stop citing it.
+      const unindex = async (k: string) => {
+        const f = index.get(k)
+        if (f) await forget(client, f.id).catch(() => {})
+      }
       void run(`Deleting ${entry.key}`, async (say) => {
-        if (!entry.isDir) return remove(client, activeBucket, key)
+        if (!entry.isDir) {
+          await remove(client, activeBucket, key)
+          return unindex(key)
+        }
         const root = key.endsWith('/') ? key : `${key}/`
         const out = await client.http.json<{ objects?: Entry[] }>({ path: objects(activeBucket), query: { prefix: root, recursive: 'true' } })
         for (const e of (out?.objects ?? []).filter((x) => !x.isDir)) {
           say(`Deleting ${e.key}`)
           await remove(client, activeBucket, root + e.key)
+          await unindex(root + e.key)
         }
         await remove(client, activeBucket, root).catch(() => {})
       })
     },
-    [client, activeBucket, prefix, run],
+    [client, activeBucket, prefix, run, index],
   )
 
   // DOWNLOAD follows a presigned GET. The object's platform address answers a
@@ -500,7 +604,7 @@ export function Drive() {
         e.stopPropagation()
         dragCounter.current = 0
         setOver(false)
-        if (e.dataTransfer.files) handleUpload(e.dataTransfer.files)
+        if (e.dataTransfer.files?.length) void dropped(e.dataTransfer).then(handleUpload)
       }}
     >
       {/* Hidden file inputs for picker */}
@@ -890,8 +994,11 @@ export function Drive() {
 
           {/* Busy notification */}
           {busy ? (
-            <Text fontSize="$2" color="$soft">{busy}…</Text>
+            <Text fontSize="$2" color="$soft" data-slot="drive-busy">{busy}…</Text>
           ) : null}
+
+          {/* What the files say about the search, passage by passage. */}
+          {hits && hits.length ? <Hits hits={hits} onOpen={(p) => showContents(p.file.id, p.section.id)} /> : null}
 
           {/* If we are inside a Bucket/Folder, show its files & folders */}
           {bucket || prefix ? (
@@ -947,7 +1054,10 @@ export function Drive() {
                       >
                         <XStack items="center" gap="$2.5" minW={0}>
                           <Glyph entry={e} size={16} />
-                          <Text {...NAME}>{cleanName}</Text>
+                          <YStack minW={0}>
+                            <Text {...NAME}>{cleanName}</Text>
+                            {!isFolder && index.get(prefix + e.key) ? <Badge f={index.get(prefix + e.key)!} /> : null}
+                          </YStack>
                         </XStack>
 
                         <View items="flex-start">
@@ -981,6 +1091,26 @@ export function Drive() {
                               minW={140}
                               onClick={(ev: { stopPropagation: () => void }) => ev.stopPropagation()}
                             >
+                              {!isFolder && index.get(prefix + e.key) ? (
+                                <>
+                                  <Pick
+                                    icon={ListTree}
+                                    label="Contents"
+                                    onPress={() => {
+                                      setItemMenuKey(null)
+                                      setContents({ file: index.get(prefix + e.key)! })
+                                    }}
+                                  />
+                                  <Pick
+                                    icon={MessageSquare}
+                                    label="Ask in chat"
+                                    onPress={() => {
+                                      setItemMenuKey(null)
+                                      askInChat(index.get(prefix + e.key)!)
+                                    }}
+                                  />
+                                </>
+                              ) : null}
                               {!isFolder ? (
                                 <Pick
                                   icon={Download}
@@ -1142,6 +1272,17 @@ export function Drive() {
           )}
         </YStack>
       </XStack>
+
+      {contents && client ? (
+        <Contents
+          api={client}
+          file={contents.file}
+          at={contents.at}
+          onClose={() => setContents(null)}
+          onAsk={askInChat}
+          onFollow={(id, at) => showContents(id, at)}
+        />
+      ) : null}
 
       {/* Drag overlay */}
       {over ? (
