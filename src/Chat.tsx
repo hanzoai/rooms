@@ -373,6 +373,9 @@ function Why({ text }: { text: string }) {
  */
 const STALL = 300_000;
 
+/** Characters of a streaming reasoning trace a turn shows: its tail. */
+const THOUGHT = 320;
+
 /**
  * How long a send waits for a freshly attached file to have passages before it
  * goes without them. Long enough for a page or a short document to be read; a
@@ -1500,15 +1503,26 @@ function Thread({
             const read = told(said);
             if (read.carried) return <Carried text={read.text} attached={read.carried.attached} reused={read.carried.reused} />;
           }
-          // WHO IS ANSWERING, while the answer has no words yet: the agents the
-          // question addresses, or the whole room when it names nobody.
-          if (turn.role === "assistant" && !said && chat.streaming && room.length) {
+          // WHILE THE ANSWER HAS NO WORDS YET: who is answering (the agents the
+          // question addresses, or the whole room when it names nobody), and the
+          // model's reasoning as it streams (`reasoning` on the turn), dimmed and
+          // cut to its last lines.
+          const thought = turn.role === "assistant" && !said && chat.streaming ? ((turn as { reasoning?: string }).reasoning ?? "").trim() : "";
+          if (turn.role === "assistant" && !said && chat.streaming && (room.length || thought)) {
             const q = [...shown].reverse().find((one) => one.role === "user");
-            const whom = addressed(words(q?.content as Said), room);
+            const whom = room.length ? addressed(words(q?.content as Said), room) : [];
+            const doing = thought ? "thinking" : "answering";
             return (
-              <Text fontSize="$2" color="$soft">
-                {join(whom)} {whom.length > 1 ? "are" : "is"} answering…
-              </Text>
+              <YStack gap="$1" data-slot="thinking">
+                <Text fontSize="$2" color="$soft">
+                  {whom.length ? `${join(whom)} ${whom.length > 1 ? "are" : "is"} ${doing}…` : "Thinking…"}
+                </Text>
+                {thought ? (
+                  <Text fontSize="$2" color="$soft" opacity={0.72} data-slot="thought">
+                    {thought.length > THOUGHT ? `…${thought.slice(-THOUGHT).replace(/^\S*\s/, "")}` : thought}
+                  </Text>
+                ) : null}
+              </YStack>
             );
           }
           // A ROOM'S ANSWER IS SEVERAL PEOPLE'S. Each opens a line with their
