@@ -27,6 +27,7 @@ import { useIam } from '@hanzo/iam/react'
 import { ORG, bearer, hasSession, org } from './session'
 import { createAiClient, type AiClient } from '@hanzo/ai'
 import { observed } from './served'
+import { researched } from './web'
 import { where } from '../where'
 
 /**
@@ -119,6 +120,9 @@ export function useAi(): Ai {
   const account = Boolean(signedIn && sdk)
 
   const client = useMemo(() => {
+    // Every request reports which model answered (`observed`), and a completion
+    // that offers the web tools has its lookups run inside it (`researched`).
+    const wire = observed(researched((input, init) => fetch(input, init)))
     // TWO STATES, ONE ISSUER. Signed in is the visitor's own IAM session; signed
     // out is the org's IAM-minted publishable key. There is no third credential
     // and no locally-invented one — a token this app made up is a token the
@@ -126,7 +130,7 @@ export function useAi(): Ai {
     // than the free one, which is the opposite of what a signed-out reader needs.
     if (account && sdk) {
       return createAiClient({
-        fetch: observed((input, init) => fetch(input, init)),
+        fetch: wire,
         headers: scoped ? { 'X-Org-Id': scoped } : {},
         auth: {
           ...sdk,
@@ -151,7 +155,7 @@ export function useAi(): Ai {
         ...base(),
       })
     }
-    return createAiClient({ fetch: observed((input, init) => fetch(input, init)), publishableKey: where().key ?? '', ...base() })
+    return createAiClient({ fetch: wire, publishableKey: where().key ?? '', ...base() })
   }, [account, sdk, scoped])
 
   return { client, model: account ? ENSO : FREE, free: !account, ready }

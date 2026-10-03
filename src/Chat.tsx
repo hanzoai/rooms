@@ -57,6 +57,7 @@ import { Control } from "@hanzo/composer";
 import { useIam, useIamToken } from "@hanzo/iam/react";
 import { hasSession, org } from "./lib/session";
 import { chats, clock, sku, useLimits } from "./lib/limits";
+import { WEB } from "./lib/web";
 import { Meters } from "./meters";
 import { useHydrated } from "./lib/hydrated";
 import { base, served } from "./lib/ai";
@@ -720,7 +721,11 @@ function Thread({
     // completion, so the effort chosen on the bar rides the request. An
     // upstream that does not read `reasoning_effort` answers as it would have,
     // the way it does for `temperature`.
-    params: { reasoning_effort: effort },
+    // THE LIVE WEB rides every signed-in turn on an Enso or Zen model: the two
+    // lookups the platform's assistant uses, run inside the completion by the
+    // client's fetch (lib/web.ts), so a question about the weather or the news
+    // is answered from what the web says now.
+    params: { reasoning_effort: effort, ...(!anonymous && sku(model) ? { tools: WEB } : {}) },
     ...(open ? { thread: open } : {}),
     onError: (e) => {
       const needs = planRequired(e);
