@@ -102,9 +102,19 @@ describe('researched', () => {
     expect((await read(res)).content).toBe('hi')
   })
 
+  test('a turn that needs nothing fresh goes out without the tools and streams as it came', async () => {
+    const g = gateway([sse([said('A function '), said('that calls itself.')])])
+    const res = await researched(g.base, NOW)(`${API}/v1/chat/completions`, turn('explain recursion'))
+    expect((await read(res)).content).toBe('A function that calls itself.')
+    expect(g.sent).toHaveLength(1)
+    expect(g.sent[0].body.tools).toBeUndefined()
+    expect(g.sent[0].body.messages).toEqual([{ role: 'user', content: 'explain recursion' }])
+    expect(g.sent[0].body.stream).toBe(true)
+  })
+
   test('the model searches, the search runs as the reader, and the reader sees one streamed answer', async () => {
     const g = gateway([sse([asks('websearch', { q: 'population of Cork' })]), sse([said('About 224,000 '), said('[CSO](https://www.cso.ie/).')])])
-    const res = await researched(g.base, NOW)(`${API}/v1/chat/completions`, turn('what is the population of Cork?'))
+    const res = await researched(g.base, NOW)(`${API}/v1/chat/completions`, turn('what does https://www.cso.ie/ say about the population of Cork?'))
     const seen = await read(res)
     expect(seen.content).toBe('About 224,000 [CSO](https://www.cso.ie/).')
     expect(seen.done).toBe(1)
@@ -143,7 +153,7 @@ describe('researched', () => {
   test('the rounds are bounded and the last request offers no tools', async () => {
     const loops = Array.from({ length: ROUNDS }, (_, i) => sse([asks('crawl', { url: `https://e.com/${i}` }, `c${i}`)]))
     const g = gateway([...loops, sse([said('Here is what I found.')])])
-    const res = await researched(g.base, NOW)(`${API}/v1/chat/completions`, turn('compare these pages'))
+    const res = await researched(g.base, NOW)(`${API}/v1/chat/completions`, turn('compare https://e.com/0 and https://e.com/1'))
     expect((await read(res)).content).toBe('Here is what I found.')
     const hops = g.completions()
     expect(hops).toHaveLength(ROUNDS + 1)

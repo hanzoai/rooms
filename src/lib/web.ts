@@ -19,6 +19,11 @@
  * model is asked (`current`), and the search reads the best pages as well as
  * listing them, so the answer can quote a reading rather than a page's blurb.
  *
+ * Only a turn that needs the web is offered it: a question about now, or one
+ * that names a page. The gateway answers a request that offers tools whole,
+ * after checking its calls against their schemas, so its first word waits for
+ * its last; every other turn goes out without the tools and streams.
+ *
  * Bounded: at most ROUNDS rounds of lookups the model asks for, CALLS lookups in
  * a round, and every lookup on its own clock. The request after the last round
  * offers no tools, so the turn ends in words.
@@ -397,6 +402,11 @@ export function researched(base: typeof fetch, clock: () => Date = () => new Dat
     }
     const names = new Set((asked.tools ?? []).map((t) => t?.function?.name))
     if (!asked.stream || !Array.isArray(asked.messages) || !WEB.every((t) => names.has(t.function.name))) return base(input, init)
+    const q = opening(asked.messages)
+    if (!q && !named(told(textOf(asked.messages.at(-1)?.content)).text).length) {
+      const { tools: _tools, tool_choice: _choice, ...bare } = asked
+      return base(input, { ...init, body: JSON.stringify(bare) })
+    }
 
     const now = clock()
     const headers = new Headers(init.headers)
@@ -416,7 +426,6 @@ export function researched(base: typeof fetch, clock: () => Date = () => new Dat
 
     let messages = ruled(asked.messages, now)
     const seen = new Set(asked.messages.flatMap((m) => named(textOf(m.content))))
-    const q = opening(messages)
     if (q) {
       const id = 'web_0'
       messages = [
