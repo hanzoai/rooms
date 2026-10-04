@@ -3,7 +3,7 @@
 // The reader's own profile, in the column beside the room.
 //
 // A WORKSPACE OPENS A PROFILE IN A PANEL, not a page. The page exists — it is
-// /account, and it is where the whole record is edited — but reaching it from a
+// Settings (/settings), where the whole record is edited — but reaching it from a
 // conversation costs the conversation: the room, the sidebar and the rail all
 // go, and coming back is a navigation rather than a close. Slack, Teams and
 // every app shaped like them put this in the right column for that reason, and
@@ -29,7 +29,7 @@ import { BAD } from './lib/mix'
 /** Slack's is 380 and the thread panel that shares this slot is the same. */
 const WIDTH = 380
 
-const ACCOUNT = '/account'
+const ACCOUNT = '/settings'
 
 export function Profile({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { Link } = useRooms()

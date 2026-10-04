@@ -2,7 +2,7 @@
 
 // The app's one column, the same in both modes: the Chat / Dev switch, a filter,
 // New, Dev's places, the Recents of the mode it is in, and at the foot the
-// Slack card and the account (components/workspace/Me.tsx).
+// account (components/workspace/Me.tsx).
 //
 // It is a pane on the frame's ground (app/_web.tsx), sized by the edge in the
 // gutter to its right: dragged, keyed or double-clicked back (@hanzo/build's
@@ -12,7 +12,7 @@
 
 import { Text, XStack, YStack } from '@hanzo/gui'
 import { ChevronDown, ChevronUp, PanelLeft, Plus, Search } from 'lucide-react'
-import { Grip, nav, path, route, Slack, type Host } from '@hanzo/build'
+import { Grip, nav, route, type Host } from '@hanzo/build'
 import { Sidebar, SidebarIconButton, SidebarItem } from '@hanzo/ui/chat'
 import { HanzoMark } from '@hanzogui/shell'
 import { useState } from 'react'
@@ -80,7 +80,6 @@ export function Column({
 }) {
   const [kept, setCollapsed] = useKept('hanzo.build.rail', false)
   const collapsed = kept && !drawer
-  const [slack, setSlack] = useKept('hanzo.build.slack', false)
   const [unfolded, setUnfolded] = useState(false)
   const [words, setWords] = useState('')
   const span = useSpan(SPAN, WIDTH, FLOOR, CEIL)
@@ -225,11 +224,6 @@ export function Column({
         <YStack gap="$2" pt="$2" shrink={0}>
           <Made />
           <Setup />
-          {host.person && !slack ? (
-            <YStack data-slot="app-slack">
-              <Slack onOpen={() => dev(path({ kind: 'settings', section: 'integrations' }))} onDismiss={() => setSlack(true)} />
-            </YStack>
-          ) : null}
         </YStack>
         <XStack data-slot="app-foot" items="center" gap="$1" pt="$2" shrink={0}>
           <YStack flex={1} minW={0}>
