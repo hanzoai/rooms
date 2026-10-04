@@ -1,7 +1,7 @@
 # @hanzo/rooms
 
 The workspace rooms — Home, Chat, Inbox, Contacts, Meet, Cal, Drive, Board,
-Work, Bots, Guide, Settings — and the frame that holds them (Room, Shell,
+Work, Bots, Settings — and the frame that holds them (Room, Shell,
 Orgs), once, for every surface. hanzo.ai and hanzo.team import them; neither
 keeps a copy. Repo `github.com/hanzoai/rooms`, npm `@hanzo/rooms`.
 
