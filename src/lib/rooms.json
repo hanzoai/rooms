@@ -1,12 +1,10 @@
 [
-  "/beluga",
   "/board",
   "/bots",
   "/cal",
   "/chat",
   "/chat/shared",
   "/contacts",
-  "/dashboard",
   "/dev",
   "/drive",
   "/home",
@@ -18,6 +16,5 @@
   "/settings/organization/keys",
   "/settings/organization/members",
   "/settings/organization/usage",
-  "/vibe",
   "/work"
 ]
