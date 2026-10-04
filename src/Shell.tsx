@@ -1201,8 +1201,12 @@ function Bots({
           rounded="$1"
           bg="$raised"
           hoverStyle={{ opacity: 0.8 }}
+          display="flex"
+          items="center"
+          justify="center"
+          $touchable={{ minH: 40, minW: 40 }}
         >
-          <Text fontSize={10} fontWeight="600" color="$soft">
+          <Text fontSize={12} fontWeight="600" color="$soft">
             {sortMode === "alpha" ? "A-Z" : "Recent"}
           </Text>
         </Box>
@@ -1722,7 +1726,7 @@ function Rail({
                 hoverStyle={{ bg: here ? "$edge" : "$hover" }}
               >
                 <place.icon size={18} aria-hidden />
-                <Text fontSize={10} lineHeight={12} color={here ? "$ink" : "$quiet"} numberOfLines={1}>
+                <Text fontSize={12} lineHeight={14} color={here ? "$ink" : "$quiet"} numberOfLines={1}>
                   {place.label}
                 </Text>
               </Box>
@@ -1745,7 +1749,7 @@ function Rail({
                 hoverStyle={{ bg: "$hover" }}
               >
                 <LayoutGrid size={18} aria-hidden />
-                <Text fontSize={10} lineHeight={12} color="$quiet" numberOfLines={1}>
+                <Text fontSize={12} lineHeight={14} color="$quiet" numberOfLines={1}>
                   Workspace
                 </Text>
               </Box>
@@ -1771,7 +1775,7 @@ function Rail({
             hoverStyle={{ bg: "$hover" }}
           >
             <Search size={18} aria-hidden />
-            <Text fontSize={10} lineHeight={12} color="$quiet">
+            <Text fontSize={12} lineHeight={14} color="$quiet">
               More
             </Text>
           </Box>
@@ -1795,7 +1799,7 @@ function Rail({
             hoverStyle={{ bg: "$hover" }}
           >
             <Settings2 size={18} aria-hidden />
-            <Text fontSize={10} lineHeight={12} color="$quiet">
+            <Text fontSize={12} lineHeight={14} color="$quiet">
               Settings
             </Text>
           </Box>
@@ -2198,6 +2202,7 @@ function Frame({
           justify="center"
           width={28}
           height={28}
+          $touchable={{ width: 40, height: 40 }}
           color="inherit"
         >
           <HanzoMark size={18} />
