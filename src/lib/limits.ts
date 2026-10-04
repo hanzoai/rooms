@@ -10,6 +10,7 @@
  */
 
 import { useLimits as useHeld, type UseLimits } from '@hanzo/ui/product/useLimits'
+import { paidPlan } from '@hanzo/ui/product/limits'
 import { api } from './api'
 import { scope } from './session'
 
@@ -18,6 +19,23 @@ export async function readLimits(signal: AbortSignal): Promise<unknown> {
   const res = await fetch(`${api()}/v1/ai/limits`, { headers: scope(), signal })
   if (!res.ok) throw Object.assign(new Error(`Limits answered ${res.status}`), { status: res.status })
   return res.json()
+}
+
+/**
+ * The org's choice to keep paying from credits once included usage runs out —
+ * `PUT /v1/ai/limits`, org admins only. A refusal throws with the server's own
+ * words, so the reader is told why.
+ */
+export async function setCreditsAfterAllowance(on: boolean): Promise<void> {
+  const res = await fetch(`${api()}/v1/ai/limits`, {
+    method: 'PUT',
+    headers: { ...scope(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ creditsAfterAllowance: on }),
+  })
+  if (res.ok) return
+  const body = (await res.json().catch(() => null)) as { error?: { message?: unknown } | string; message?: unknown } | null
+  const said = typeof body?.error === 'string' ? body.error : typeof body?.error?.message === 'string' ? body.error.message : typeof body?.message === 'string' ? body.message : ''
+  throw Object.assign(new Error(said || (res.status === 403 ? 'Only an organization admin can turn on credits.' : `Credits answered ${res.status}`)), { status: res.status })
 }
 
 /**
@@ -30,10 +48,12 @@ export const useLimits = (enabled = true, org: string | null = null, name?: (id:
 
 /**
  * Whether a reader's dollar spend may be shown: their limits came back and name no
- * plan, or could not be read. A plan holder sees usage as shares, never money.
+ * paid plan, or could not be read. A plan holder sees usage as shares, never money.
  */
 export const spendShown = ({ limits, answered }: Pick<UseLimits, 'limits' | 'answered'>): boolean =>
-  answered && !limits?.plan
+  answered && !paidPlan(limits)
+
+export { paidPlan }
 
 /** Whether a catalog family is one of Hanzo's chat families, Enso or Zen, whose turns carry the live web. */
 export const house = (family: string | undefined): boolean => family === 'enso' || family === 'zen'

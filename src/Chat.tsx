@@ -56,9 +56,10 @@ import { Anchor, Box, Button, Text, Tooltip, TooltipContent, TooltipTrigger, Vie
 import { Control } from "@hanzo/composer";
 import { useIam, useIamToken } from "@hanzo/iam/react";
 import { hasSession, org } from "./lib/session";
-import { chats, house, useLimits } from "./lib/limits";
+import { chats, house, paidPlan, setCreditsAfterAllowance, useLimits } from "./lib/limits";
 import { parseModels } from "@hanzo/ui/models/catalog";
 import { LimitedBanner } from "@hanzo/ui/product/LimitedBanner";
+import type { LimitAction } from "@hanzo/ui/product/limits";
 import { WEB } from "./lib/web";
 import { useHydrated } from "./lib/hydrated";
 import { base, served } from "./lib/ai";
@@ -712,7 +713,7 @@ function Thread({
   // only once the reader is turned away: a reply answered from a free model, or
   // a refusal.
   const { limits, notice, reload: reread } = useLimits(!anonymous, org(), (id) => nameOf(catalog, id));
-  const held = Boolean(limits?.plan);
+  const held = paidPlan(limits);
   const pause = notice && (notice.fallback || notice.refused) ? notice : null;
   // EVERY MODEL IS CHOSEN, never asked for: one the plan does not cover still
   // picks, and the gateway answers it with the policy's refusal or from Enso,
@@ -1002,6 +1003,37 @@ function Thread({
     }
     void latest.current(text);
   }, []);
+
+  // THE WAYS PAST A PAUSE, as the server sends them. A page opens; Continue
+  // with credits turns the org's choice on and asks the last question again on
+  // the model the reader picked; a switch moves the picker. A refusal of the
+  // write (only an org admin may make it) is said under the banner.
+  const [actWrong, setActWrong] = useState("");
+  const act = useCallback(
+    (a: LimitAction) => {
+      setActWrong("");
+      if (a.kind === "switch") {
+        if (a.model) choose(a.model);
+        return;
+      }
+      if (a.kind !== "credits") {
+        if (a.url) window.location.assign(a.url);
+        return;
+      }
+      setCreditsAfterAllowance(true)
+        .then(() => {
+          reread();
+          // A refused question is asked again in its place; one a free model
+          // answered is asked once more after that answer.
+          const q = [...turns.current].reverse().find((m) => m.role === "user");
+          if (q) speak(words(q.content as Said), failures[q.id] ? q.id : undefined);
+        })
+        .catch((e: unknown) => setActWrong(e instanceof Error ? e.message : "Credits could not be turned on."));
+    },
+    // `choose` is rebuilt each render; the handler follows it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [reread, speak, failures, picked, preferred, listed],
+  );
 
   // A TURN THAT NEVER SPEAKS IS STOPPED. A stream that stays open with nothing
   // in it would leave a Stop button and no answer for as long as the upstream
@@ -1800,7 +1832,12 @@ function Thread({
               <YStack width="calc(100% - 32px)" maxW={`calc(${MEASURE} - 3rem)`} mx="auto" gap="$1.5">
                 {/* TURNED AWAY: what paused, the ways past it, and the usage page. */}
                 {pause ? (
-                  <LimitedBanner message={pause.message} actions={pause.actions} onUsage={() => showSettings("usage")} />
+                  <LimitedBanner message={pause.message} actions={pause.actions} onAction={act} onUsage={() => showSettings("usage")} />
+                ) : null}
+                {actWrong ? (
+                  <Text role="alert" data-slot="limited-banner-wrong" fontSize="$2" color={BAD}>
+                    {actWrong}
+                  </Text>
                 ) : null}
                 {files.length ? (
                   <XStack gap="$1.5" flexWrap="wrap" role="list" aria-label="Attached files" data-slot="composer-attached">

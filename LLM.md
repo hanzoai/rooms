@@ -116,11 +116,16 @@ Gates: `pnpm typecheck`, `pnpm lint:design` (ratchet in
 `lib/limits.ts` is @hanzo/ui's `useLimits` reading `GET /v1/ai/limits` with
 `scope()`; `lib/served.ts` hands every `/v1/chat/{completions,public}` answer to
 `observe`, so `X-Hanzo-Usage`/`-Fallback` and a `billing_error` refusal update it
-at once. Chat draws the pause (`LimitedBanner`, Upgrade and Add prepaid credit)
-or the near note over the composer, `Enso`'s picker marks a paused model
-"Paused" (its class `limited`, or a `paused` entry naming it) and still picks
-it, and a refusal is said in the thread in the server's words. Settings → Usage draws `PlanUsage`. Shares only: no amount,
-count or cap is drawn anywhere.
+at once. Chat draws no bar and no near note; once the reader is turned away (a
+fallback reply or a billing refusal) one `LimitedBanner` over the composer carries
+the server's actions in its order — Continue with credits writes
+`setCreditsAfterAllowance(true)` and asks the last question again on the reader's
+pick, a switch goes through `choose` — plus See usage. `Enso`'s picker marks a
+paused model "Paused" (its class `limited`, or a `paused` entry naming it) and
+still picks it, and a refusal is said in the thread in the server's words.
+Settings → Usage (also the account menu's Usage) draws `PlanUsage` with the
+credits switch. `paidPlan` decides whether limits name a paid plan (the free plan
+answers `"free"`). Shares only: no amount, count or cap is drawn anywhere.
 
 ## Voice
 

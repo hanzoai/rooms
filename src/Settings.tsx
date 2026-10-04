@@ -43,11 +43,11 @@ import { parseModels } from '@hanzo/ui/models/catalog'
 import { UsagePanel } from '@hanzo/usage/panel'
 import { Catalog, type Tab } from './Directory'
 import { useModel } from './model'
-import { payPage } from './lib/pay'
+import { checkoutUrl, payPage } from './lib/pay'
 import { planName } from './lib/plans'
 import { api } from './lib/api'
 import { renewal, useSubscription, useTier } from './lib/tier'
-import { spendShown, useLimits } from './lib/limits'
+import { paidPlan, setCreditsAfterAllowance, spendShown, useLimits } from './lib/limits'
 import { PlanUsage } from '@hanzo/ui/product/PlanUsage'
 import { Look } from './look'
 import { ProviderMark } from './ProviderMark'
@@ -444,8 +444,18 @@ function Usage({ sections, title, meters = false }: { sections?: Record<string, 
   if (!isAuthenticated || !accessToken) {
     return <Text fontSize="$3" color="$soft">Sign in to see your usage.</Text>
   }
-  const plan = meters && read.limits ? <PlanUsage limits={read.limits} plan={planName(read.limits.plan) || undefined} notice={read.notice} /> : null
-  if (read.limits?.plan || !spendShown(read)) return plan
+  const plan =
+    meters && read.limits ? (
+      <PlanUsage
+        limits={read.limits}
+        plan={planName(read.limits.plan) || undefined}
+        notice={read.notice}
+        onCredits={(on) => setCreditsAfterAllowance(on).then(read.reload)}
+        creditsHref={payPage()}
+        addCreditsHref={checkoutUrl()}
+      />
+    ) : null
+  if (paidPlan(read.limits) || !spendShown(read)) return plan
   // The address is read HERE rather than at import: the panel sends the bearer
   // with every read, and a credentialed read to an absolute address from a page
   // the gateway does not admit dies in preflight — which drew this panel as an
