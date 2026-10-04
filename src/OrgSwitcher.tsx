@@ -221,9 +221,9 @@ export function OrgSwitcherDropdown({
       </Button>
 
       <Button asChild {...LINK}>
-        <a href={site("/account/organization")}>
+        <a href={site("/settings/organization")}>
           <Settings size={14} />
-          Organization Settings
+          Organization settings
         </a>
       </Button>
     </YStack>
