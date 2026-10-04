@@ -22,17 +22,17 @@ minimumReleaseAge: 0
 
 catalog:
   '@hanzo/ai': 0.6.20
-  '@hanzo/appearance': 0.2.6
+  '@hanzo/appearance': 0.2.8
   '@hanzo/build': 0.2.34
   '@hanzo/composer': 0.2.0
-  '@hanzo/design': 0.5.33
+  '@hanzo/design': 0.5.34
   '@hanzo/event': 0.3.56
   '@hanzo/gui': 8.3.5
   '@hanzo/iam': 0.21.28
   '@hanzo/logo': 1.0.26
   '@hanzo/personas': 1.0.5
   '@hanzo/plans': 1.8.9
-  '@hanzo/ui': 8.27.57
+  '@hanzo/ui': 8.27.67
   '@hanzo/usage': 0.1.18
   '@hanzo/voice': 0.1.16
   '@hanzogui/config': 8.3.5

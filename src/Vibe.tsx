@@ -37,9 +37,10 @@ import {
   Users,
 } from 'lucide-react'
 import { View, XStack, YStack, Text } from '@hanzo/gui'
-import { Button, Picker } from '@hanzo/ui'
+import { Button } from '@hanzo/ui'
 import { AiProvider, useAgents, useModels, usePeople } from '@hanzo/ai/react'
-import { sku } from './lib/limits'
+import { ModelPicker } from '@hanzo/ui/models'
+import { parseModels } from '@hanzo/ui/models/catalog'
 import { useIam, useOrganizations } from '@hanzo/iam/react'
 import { hasSession } from './lib/session'
 import { useHydrated } from './lib/hydrated'
@@ -212,9 +213,9 @@ function VibeWorkspaceInner() {
 function Vibe() {
   const { Link } = useRooms()
   const { user } = useIam()
-  // Hanzo models alone, as every picker here offers them (`sku`).
-  const { models: listed } = useModels()
-  const models = useMemo(() => listed.filter((m) => sku(m.id)), [listed])
+  // Every model the gateway lists, through the one picker.
+  const { models: catalog } = useModels()
+  const models = useMemo(() => parseModels(catalog), [catalog])
 
   const [activeTabMobile, setActiveTabMobile] = useState<'stream' | 'preview' | 'team'>('stream')
 
@@ -229,7 +230,7 @@ function Vibe() {
   // The house name for the lane, resolved against what the gateway serves —
   // `served` falls to a model that answers rather than sending one nobody has.
   const [wanted, setWanted] = useState(user ? ENSO : FREE)
-  const model = served(models, wanted)
+  const model = models.some((m) => m.id === wanted) ? wanted : served(models, wanted)
   const [busy, setBusy] = useState(false)
 
   const [turns, setTurns] = useState<Turn[]>([])
@@ -509,18 +510,8 @@ function Vibe() {
             gap="$2"
           >
             <XStack items="center" justify="space-between" gap="$2">
-              {/* THE MODELS THE GATEWAY SERVES. The select here offered four
-                  typed names — "ZenLM 3 — Fast & Capable", "GPT-4o Omnimodal" —
-                  and a second one offering three reasoning efforts, neither of
-                  which was ever read when the prompt was sent. */}
-              <Picker value={model} onChange={(e) => setWanted(e.target.value)} aria-label="Model" maxW={200}>
-                {models.length === 0 ? <option value={model}>{model}</option> : null}
-                {models.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.id}
-                  </option>
-                ))}
-              </Picker>
+              {/* THE MODELS THE GATEWAY SERVES, all of them, in the one picker. */}
+              <ModelPicker models={models} scope="chat" value={model} onChange={setWanted} size="sm" quiet />
               <Text fontSize={10} color="$faint">
                 Press Enter to send
               </Text>

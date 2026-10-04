@@ -290,23 +290,6 @@ export function saving(plan: SubscriptionPlan): number | null {
 }
 
 /**
- * The models the Free plan runs, as @hanzo/plans states them: `ai.models` on
- * the `free` row. Read on first ask and not at import, so a page that only
- * formats money or names the pay page carries none of the catalogue.
- */
-let freeModels: ReadonlySet<string> | null = null;
-
-/** Whether the Free plan runs a model: one its row names, or any `:free` route. */
-export function onFree(model: string): boolean {
-  freeModels ??= new Set(
-    ((subscriptionPlans as CatalogPlan[]).find((p) => p.id === "free")?.entitlements?.["ai.models"] as
-      | string[]
-      | undefined) ?? [],
-  );
-  return freeModels.has(model) || model.endsWith(":free");
-}
-
-/**
  * The catalog's own name for a plan slug — "max-20x" reads as "Max 20x" —
  * or null where the slug is empty or the catalog does not carry it.
  *

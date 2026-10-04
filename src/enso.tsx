@@ -12,7 +12,7 @@ import {
   XStack,
   YStack,
 } from '@hanzo/ui'
-import { ModelSelector, RESEARCH } from '@hanzo/ui/models'
+import { ModelPicker, type ModelCatalogEntry, type PauseSource } from '@hanzo/ui/models'
 import { ProviderMark } from './ProviderMark'
 import { ENSO, FREE } from './lib/ai'
 import { modelName } from './lib/models'
@@ -96,7 +96,7 @@ export function useEffort(): readonly [EffortId, (next: EffortId) => void] {
 }
 
 /** The name a served model goes by: its row's label, its name, or its id made readable. */
-export function nameOf(models: { id: string }[], id: string): string {
+export function nameOf(models: readonly { id: string }[], id: string): string {
   const row = models.find((m) => m.id === id) as { label?: unknown; name?: unknown } | undefined
   return modelName({ id, name: String(row?.label ?? row?.name ?? '') })
 }
@@ -108,7 +108,10 @@ export interface EnsoProps {
   /** The override. `models` empty hides it rather than offering an empty menu. */
   model?: string
   onModel?: (id: string) => void
-  models?: { id: string }[]
+  /** The catalog, as `parseModels` reads `GET /v1/models`: every model is offered. */
+  models?: readonly ModelCatalogEntry[]
+  /** The payer's plan usage: a paused model says so and still picks. */
+  limits?: PauseSource | null
   disabled?: boolean
 }
 
@@ -119,7 +122,7 @@ export interface EnsoProps {
  * (`ENSO`, or `FREE` on the free route), and the model itself once one is
  * picked. Beside the name it states the effort where the surface sends one.
  */
-export function Enso({ effort, onEffort, model, onModel, models = [], disabled }: EnsoProps) {
+export function Enso({ effort, onEffort, model, onModel, models = [], limits, disabled }: EnsoProps) {
   const [open, setOpen] = useState(false)
   const chosen = EFFORTS.find((e) => e.id === effort)
   const pace = onEffort && chosen ? chosen.label : null
@@ -206,8 +209,9 @@ export function Enso({ effort, onEffort, model, onModel, models = [], disabled }
                 <Text fontSize="$1" color="$soft">
                   Enso picks the model. Override it for this account:
                 </Text>
-                <ModelSelector
-                  models={[...models, ...RESEARCH]}
+                <ModelPicker
+                  models={models}
+                  limits={limits}
                   value={model}
                   onChange={(id) => {
                     onModel(id)

@@ -117,9 +117,9 @@ Gates: `pnpm typecheck`, `pnpm lint:design` (ratchet in
 `scope()`; `lib/served.ts` hands every `/v1/chat/{completions,public}` answer to
 `observe`, so `X-Hanzo-Usage`/`-Fallback` and a `billing_error` refusal update it
 at once. Chat draws the pause (`LimitedBanner`, Upgrade and Add prepaid credit)
-or the near note over the composer, `Enso` marks a paused class's models
-"Paused" and still picks them, and a refusal is said in the thread in the
-server's words. Settings → Usage draws `PlanUsage`. Shares only: no amount,
+or the near note over the composer, `Enso`'s picker marks a paused model
+"Paused" (its class `limited`, or a `paused` entry naming it) and still picks
+it, and a refusal is said in the thread in the server's words. Settings → Usage draws `PlanUsage`. Shares only: no amount,
 count or cap is drawn anywhere.
 
 ## Voice
@@ -147,6 +147,19 @@ label, `SpeakButton`'s, Meet's status line).
 - `cast.tsx` voices are speech-service ids (`am_michael`, `bf_emma`): first
   letter accent, second register. Never OpenAI names.
 - The model picker never offers a model whose `outputs` lacks `text`.
+
+## Models
+
+Every picker here is `@hanzo/ui/models` `ModelPicker` over the whole catalog
+(`parseModels` of `GET /v1/models`): Hanzo's families first, then every maker.
+Chat's `Enso` panel is unscoped — all of it, Kai included, a model that does not
+converse saying what it does — and a listed pick is sent as picked; only a name
+the catalog does not list falls to `served`. Vibe and the agent form are
+`scope="chat"`. A model's class and family are the catalog's fields, never read
+from its id. A premium pick holds for the conversation and is never remembered
+as the default (`Chat`'s `picked`); Settings' default picker offers no premium
+model. Nothing gates a pick on the plan: the gateway refuses or answers from Enso, and the room shows that. The live web rides a turn whose
+model the catalog files under Enso or Zen (`house`).
 
 ## What each app still owns
 

@@ -106,7 +106,8 @@ import { hasSession, superAdmin } from "./lib/session";
 import { enter, LOGIN } from "./lib/destination";
 import { address, sharedWithMe, type SharedItem } from "./lib/share";
 import { list } from "./lib/list";
-import { sku } from "./lib/limits";
+import { ModelPicker } from "@hanzo/ui/models";
+import { parseModels } from "@hanzo/ui/models/catalog";
 import { mark } from "./lib/mark";
 import { useOpen } from "./open";
 import { useSpan } from "./span";
@@ -1081,6 +1082,7 @@ function Bots({
   const [wrong, setWrong] = useState<string | null>(null);
   const picking = useRef<HTMLInputElement | null>(null);
   const { models } = useModels();
+  const listed = useMemo(() => parseModels(models), [models]);
 
   const allPeopleMap = new Map<string, any>();
   for (const p of (Array.isArray(storedPeople) ? storedPeople : [])) if (p?.id) allPeopleMap.set(p.id, p);
@@ -1293,21 +1295,9 @@ function Bots({
             />
             {/* WHICH MIND. The catalog is the org's own, so this offers what
                 actually answers rather than a name that has to match one. */}
-            <Text
-              render={<select value={model} onChange={(e) => setModel(e.target.value)} aria-label="Model" />}
-              {...FIELD}
-              outlineStyle={undefined}
-              flex={1}
-              minW={0}
-              px={8}
-            >
-              <option value="enso">enso</option>
-              {models.filter((one) => sku(one.id)).map((one) => (
-                <option key={one.id} value={one.id}>
-                  {one.id}
-                </option>
-              ))}
-            </Text>
+            <YStack flex={1} minW={0}>
+              <ModelPicker models={listed} scope="chat" value={model} onChange={setModel} size="sm" />
+            </YStack>
             <Box
               render="button"
               onClick={() => {

@@ -38,7 +38,8 @@ import { tap } from './lib/tap'
 import { useIam, useIamIdentity, useOrganizations } from '@hanzo/iam/react'
 import { useSignOut } from './lib/signout'
 import { useModels } from '@hanzo/ai/react'
-import { ModelSelector, RESEARCH } from '@hanzo/ui/models'
+import { ModelPicker } from '@hanzo/ui/models'
+import { parseModels } from '@hanzo/ui/models/catalog'
 import { UsagePanel } from '@hanzo/usage/panel'
 import { Catalog, type Tab } from './Directory'
 import { useModel } from './model'
@@ -46,7 +47,7 @@ import { payPage } from './lib/pay'
 import { planName } from './lib/plans'
 import { api } from './lib/api'
 import { renewal, useSubscription, useTier } from './lib/tier'
-import { sku, spendShown, useLimits } from './lib/limits'
+import { spendShown, useLimits } from './lib/limits'
 import { PlanUsage } from '@hanzo/ui/product/PlanUsage'
 import { Look } from './look'
 import { ProviderMark } from './ProviderMark'
@@ -250,57 +251,25 @@ function Pane({ id, note }: { id: string; note?: string }) {
   )
 }
 
-/** One default in one place; agents may still bring their own model. */
+/**
+ * One default in one place; agents may still bring their own model. A premium
+ * model is never a default: it is picked per conversation, in the composer, so
+ * this picker offers the rest of the catalog.
+ */
 function Model() {
   const { models: served } = useModels()
-  // Hanzo models alone, as the composer's picker offers them (`sku`).
-  const models = useMemo(() => served.filter((m) => sku(m.id)), [served])
+  const models = useMemo(() => parseModels(served).filter((m) => m.class !== 'premium'), [served])
   const [model, choose] = useModel()
 
   return (
     <YStack gap="$3" maxW={420}>
       <Text fontSize="$3" color="$soft">
-        Used for new chats. An agent with its own model keeps that choice.
+        Used for new chats. An agent with its own model keeps that choice. Premium models are picked per
+        conversation in the composer.
       </Text>
       <XStack self="flex-start">
-        <ModelSelector models={[...models, ...RESEARCH]} value={model} onChange={choose} size="sm" />
+        <ModelPicker models={models} scope="chat" value={model} onChange={choose} size="sm" />
       </XStack>
-      <YStack gap="$2" mt="$2">
-        {models
-          .filter((m) => !m.id.includes('openrouter'))
-          .slice(0, 8)
-          .map((m) => {
-            const isSel = model === m.id
-            const p = m.id.startsWith('zen') ? 'zen' : 'enso'
-            return (
-              <Box
-                key={m.id}
-                render="button"
-                onClick={() => choose(m.id)}
-                px="$3"
-                py="$2"
-                rounded="$2"
-                borderWidth={1}
-                borderColor={isSel ? '$ink' : '$borderColor'}
-                bg={isSel ? '$raised' : 'transparent'}
-                hoverStyle={{ bg: '$hover' }}
-                cursor="pointer"
-              >
-                <XStack items="center" gap="$2.5">
-                  <ProviderMark provider={p} size={16} />
-                  <Text fontSize="$2" fontWeight="600" color="$ink" flex={1}>
-                    {m.id}
-                  </Text>
-                  {isSel ? (
-                    <Text fontSize="$1" color="$soft">
-                      Active
-                    </Text>
-                  ) : null}
-                </XStack>
-              </Box>
-            )
-          })}
-      </YStack>
     </YStack>
   )
 }

@@ -35,8 +35,8 @@ export const useLimits = (enabled = true, org: string | null = null, name?: (id:
 export const spendShown = ({ limits, answered }: Pick<UseLimits, 'limits' | 'answered'>): boolean =>
   answered && !limits?.plan
 
-/** Whether a model is a Hanzo SKU — an Enso or Zen id — the only models a consumer surface offers. */
-export const sku = (id: string): boolean => /^(hanzo\/)?(enso|zen)/i.test(id)
+/** Whether a catalog family is one of Hanzo's chat families, Enso or Zen, whose turns carry the live web. */
+export const house = (family: string | undefined): boolean => family === 'enso' || family === 'zen'
 
 /**
  * Whether a model can answer a chat turn: it names no outputs, or names text

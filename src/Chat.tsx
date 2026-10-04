@@ -56,7 +56,8 @@ import { Anchor, Box, Button, Text, Tooltip, TooltipContent, TooltipTrigger, Vie
 import { Control } from "@hanzo/composer";
 import { useIam, useIamToken } from "@hanzo/iam/react";
 import { hasSession, org } from "./lib/session";
-import { chats, sku, useLimits } from "./lib/limits";
+import { chats, house, useLimits } from "./lib/limits";
+import { parseModels } from "@hanzo/ui/models/catalog";
 import { LimitedBanner } from "@hanzo/ui/product/LimitedBanner";
 import { WEB } from "./lib/web";
 import { useHydrated } from "./lib/hydrated";
@@ -75,7 +76,6 @@ import { useStarred } from "./stars";
 import { useModel } from "./model";
 import { Enso, nameOf, useEffort } from "./enso";
 import { checkoutUrl } from './lib/pay';
-import { onFree } from './lib/plans';
 import { Upgrade, useFree, type Ask } from './Upgrade';
 import { enter, LOGIN } from './lib/destination';
 import { first } from './lib/first';
@@ -690,15 +690,22 @@ function Thread({
   // outputs and names no text (`chats`) is neither offered nor fallen back to.
   const { models: catalog } = useModels();
   const models = useMemo(() => catalog.filter(chats), [catalog]);
-  // HANZO MODELS ALONE are offered here, to everyone: an Enso or Zen id
-  // (`sku`). A preference kept from before for any other model is not one this
-  // room offers, so the house router is asked for instead, and `served` keeps
-  // to the house models wherever the catalog carries one. An agent's own model
-  // is sent as it is named, never swapped for another the catalog lists; the
-  // gateway says which model answered (`servedBy`).
-  const offered = useMemo(() => models.filter((m) => sku(m.id)), [models]);
-  const wanted = sku(preferred) ? preferred : ENSO;
-  const model = persona?.model || served(models, anonymous ? FREE : wanted);
+  // EVERY MODEL THE GATEWAY LISTS is offered here, through the one picker, and
+  // read from the catalog's own fields (`parseModels`): its class, its family.
+  // A premium model is picked for THIS conversation and never remembered as
+  // the default, so the next chat starts on Enso again; any other pick is the
+  // reader's default. A preference kept from before for a premium model is
+  // not a default either, so the house router is asked for instead. An agent's
+  // own model is sent as it is named; the gateway says which model answered
+  // (`servedBy`).
+  const listed = useMemo(() => parseModels(catalog), [catalog]);
+  const rowOf = (id: string) => listed.find((m) => m.id === id);
+  const [picked, setPicked] = useState<string | null>(null);
+  const wanted = picked ?? (preferred && rowOf(preferred)?.class !== "premium" ? preferred : ENSO);
+  // A model the catalog lists is sent as picked, whatever it answers with; only
+  // a name the catalog does not list falls to one that converses (`served`).
+  const sent = anonymous ? FREE : wanted;
+  const model = persona?.model || (rowOf(sent) ? sent : served(models, sent));
   // THE PLAN'S USAGE (lib/limits.ts), kept current by every chat answer's
   // headers and read again whenever a send settles, below. The room draws no
   // bars and no near note — those live on Settings → Usage. It says something
@@ -707,15 +714,18 @@ function Thread({
   const { limits, notice, reload: reread } = useLimits(!anonymous, org(), (id) => nameOf(catalog, id));
   const held = Boolean(limits?.plan);
   const pause = notice && (notice.fallback || notice.refused) ? notice : null;
-  // A MODEL THE FREE PLAN DOES NOT INCLUDE IS ASKED FOR, NOT CHOSEN. On Free,
-  // picking a model the plan's row does not run (`onFree`) leaves the choice
-  // where it was and opens the upgrade, titled with the model; so does a turn
-  // the gateway refuses `plan_required`. A plan the limits name is not Free,
-  // whatever the tier says, so every Hanzo model is simply chosen on it.
-  // `isFree` still drives the free-lane notice.
+  // EVERY MODEL IS CHOSEN, never asked for: one the plan does not cover still
+  // picks, and the gateway answers it with the policy's refusal or from Enso,
+  // which the room then shows. A turn the gateway refuses `plan_required`
+  // opens the upgrade, titled with the model. `isFree` still drives the
+  // free-lane notice.
   const free = useFree(!anonymous) && !held;
   const [ask, setAsk] = useState<Ask | null>(null);
-  const choose = (id: string) => (free && !onFree(id) ? setAsk({ model: nameOf(models, id) }) : setPreferred(id));
+  const choose = (id: string) => {
+    if (rowOf(id)?.class === "premium") return setPicked(id);
+    setPicked(null);
+    setPreferred(id);
+  };
   // KEEPING THE CONVERSATION is the reader's account, not this pane's choice:
   // the store is per-org, so a signed-in reader has somewhere for it to go and
   // an anonymous one does not. `thread` names the conversation being continued
@@ -732,7 +742,7 @@ function Thread({
     // lookups the platform's assistant uses, run inside the completion by the
     // client's fetch (lib/web.ts), so a question about the weather or the news
     // is answered from what the web says now.
-    params: { reasoning_effort: effort, ...(!anonymous && sku(model) ? { tools: WEB } : {}) },
+    params: { reasoning_effort: effort, ...(!anonymous && house(rowOf(model)?.family) ? { tools: WEB } : {}) },
     ...(open ? { thread: open } : {}),
     onError: (e) => {
       const needs = planRequired(e);
@@ -1836,7 +1846,8 @@ function Thread({
                 onEffort={setEffort}
                 model={wanted}
                 onModel={choose}
-                models={offered}
+                models={listed}
+                limits={limits}
               />
               <Control asChild size={ROUND}>
                 <Voice voice={voice} says={{ idle: "Dictate", listening: "Dictating — click to stop" }}>
