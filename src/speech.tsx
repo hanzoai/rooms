@@ -19,7 +19,7 @@ import { Volume2, Square } from 'lucide-react'
 import { View, XStack } from '@hanzo/gui'
 import { Button } from '@hanzo/ui'
 import { useIamToken } from '@hanzo/iam/react'
-import { mouth, speech, REFUSED, type Mouth, type Refusal } from '@hanzo/voice'
+import { mouth, refused, speech, type Mouth, type Refusal } from '@hanzo/voice'
 import { GOOD } from './lib/mix'
 import { base } from './lib/ai'
 import { voiceOf, voiceProfileOf, type VoiceProfile } from './cast'
@@ -273,7 +273,7 @@ export function SpeakButton({
   const voice = voiceOf(agentName)
   // A browser voice standing in for a refused platform sounds like success;
   // the label is the one place that says otherwise.
-  const stood = refusal ? ` ${REFUSED[refusal.covered ? 'covered' : 'lost']}` : ''
+  const stood = refusal ? ` ${refused(refusal)}` : ''
 
   // An @hanzo/ui Button: ghost at rest, the quiet pressed ground while it
   // speaks. The word for speaking is the one status here, so it alone takes

@@ -62,7 +62,7 @@ import { WEB } from "./lib/web";
 import { useHydrated } from "./lib/hydrated";
 import { base, served } from "./lib/ai";
 import { onServed, type Served } from "./lib/served";
-import { REFUSED, speech, useDictation, useTalk, useVoice, Voice } from "@hanzo/voice";
+import { refused as worded, speech, useDictation, useTalk, useVoice, Voice } from "@hanzo/voice";
 import { ArrowUp, AudioLines, Image as ImageMark, Mic, Paperclip, Square, Star, PanelRight, X } from "lucide-react";
 import { ENSO, FREE } from "./lib/ai";
 import { openThread, showSettings, useOpen } from "./open";
@@ -1819,7 +1819,7 @@ function Thread({
                     color={talk.refusal ? BAD : "$soft"}
                   >
                     {talk.refusal
-                      ? REFUSED.lost
+                      ? worded(talk.refusal)
                       : talk.reply
                         ? `Hanzo: ${talk.reply}`
                         : talk.state === "listening"

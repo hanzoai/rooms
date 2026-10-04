@@ -25,7 +25,7 @@ import {
 import { Text, View, XStack, YStack } from '@hanzo/gui'
 import { Button } from '@hanzo/ui'
 import { useIamToken } from '@hanzo/iam/react'
-import { REFUSED, speech, useTranscript, useVoice } from '@hanzo/voice'
+import { refused, speech, useTranscript, useVoice } from '@hanzo/voice'
 import { Face, voiceOf } from './cast'
 import { member } from './team'
 import { cleanForSpeech, speakAgent, stopAgentSpeech, AudioWave, useAgentSpeech } from './speech'
@@ -291,7 +291,7 @@ export function Meet() {
     onPartial: setCaption,
     onSettled: (text) => setLiveNotes((prev) => [...prev, `${clock()}: You: ${text}`]),
   })
-  const transcriberNote = transcriber.reason ?? (transcriber.refusal ? REFUSED.lost : null)
+  const transcriberNote = transcriber.reason ?? (transcriber.refusal ? refused(transcriber.refusal) : null)
 
   const handleSpokenInput = useCallback(
     async (transcript: string) => {
@@ -332,7 +332,7 @@ export function Meet() {
 
   // What the hands-free control says: why it cannot run, or that Hanzo's speech
   // refused and the browser stood in (or could not) — never silence.
-  const handsFreeNote = handsFree.reason ?? (handsFree.refusal ? REFUSED[handsFree.refusal.covered ? 'covered' : 'lost'] : null)
+  const handsFreeNote = handsFree.reason ?? (handsFree.refusal ? refused(handsFree.refusal) : null)
 
   return (
     <YStack width="100%" height="100%" bg="$background" overflowX="auto" overflowY="auto">

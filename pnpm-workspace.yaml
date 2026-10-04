@@ -34,7 +34,7 @@ catalog:
   '@hanzo/plans': 1.8.9
   '@hanzo/ui': 8.27.57
   '@hanzo/usage': 0.1.18
-  '@hanzo/voice': 0.1.12
+  '@hanzo/voice': 0.1.16
   '@hanzogui/config': 8.3.5
   '@hanzogui/core': 8.3.5
   '@hanzogui/lucide-icons-2': 8.3.5
