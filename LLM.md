@@ -159,7 +159,7 @@ Every picker here is `@hanzo/ui/models` `ModelPicker` over the whole catalog
 (`parseModels` of `GET /v1/models`): Hanzo's families first, then every maker.
 Chat's `Enso` panel is unscoped — all of it, Kai included, a model that does not
 converse saying what it does — and a listed pick is sent as picked; only a name
-the catalog does not list falls to `served`. Vibe and the agent form are
+the catalog does not list falls to `served`. The agent form is
 `scope="chat"`. A model's class and family are the catalog's fields, never read
 from its id. A premium pick holds for the conversation and is never remembered
 as the default (`Chat`'s `picked`); Settings' default picker offers no premium

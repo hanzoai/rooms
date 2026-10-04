@@ -84,8 +84,8 @@ const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/
 export const dev = (ref?: string | null): string =>
   site(!ref ? DEV : SESSION.test(ref) ? `${DEV}?run=${ref}` : SLUG.test(ref) ? `${DEV}?project=${ref}` : DEV)
 
-/** The routes under app/(app) the apex keeps: the app — /chat, a chat shared by link, and /dev — and three surfaces that are not the workspace's. */
-const KEPT = new Set(['/chat', '/chat/shared', '/dev', '/vibe', '/beluga', '/dashboard'])
+/** The routes under app/(app) the apex keeps: the app — /chat, a chat shared by link, and /dev. */
+const KEPT = new Set(['/chat', '/chat/shared', '/dev'])
 
 /** Settings, and every page under it: the person's and the organization's, served wherever the app is. */
 const SETTINGS = '/settings'

@@ -5,7 +5,7 @@
  * else could reach it: seven other modules wrote their own
  * `process.env.NEXT_PUBLIC_HANZO_API_URL || 'https://api.hanzo.ai'` — reach.ts,
  * team.ts, coding.ts, referrals.ts, useTiers.ts, Settings.tsx, Directory.tsx,
- * Beluga.tsx — and every one of them got the local case wrong in the same way.
+ * and every one of them got the local case wrong in the same way.
  *
  * THE LOCAL CASE IS THE WHOLE POINT. api.hanzo.ai admits an origin by allowlist
  * and by an https, portless DNS proof; localhost satisfies neither, so a

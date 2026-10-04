@@ -139,7 +139,7 @@ function Note({ children }: { children: string }) {
  * The directory itself.
  *
  * SPLIT OUT because `usePeople` needs an owner and a hook cannot be called
- * conditionally — the same reason Home and Vibe split theirs.
+ * conditionally — the same reason Home splits its own.
  */
 function Roster({ owner }: { owner: string }) {
   const ai = useAi()
