@@ -5,8 +5,8 @@
  *   delete the org         DELETE /v1/iam/organizations/admin/<org>
  *   found a team org       POST   /v1/iam/organizations {owner: admin, name, displayName}
  *   business address       GET|PUT /v1/settings/organization (cloud's per-org config)
- *   your keys              GET|POST|DELETE /v1/account/keys (minted by IAM on you, shown once)
- *   the org's keys         GET    /v1/iam/keys?owner=<org>, DELETE /v1/iam/keys/<org>/<name>
+ *   API keys               GET|POST /v1/account/keys, DELETE /v1/account/keys/<id>
+ *                          (yours; every key of the org for an admin; a secret shown once)
  *   payment methods        GET    /v1/billing/methods
  *   invoices               GET    /v1/billing/invoices
  *
@@ -158,46 +158,44 @@ export async function saveAddress(next: Address): Promise<Address> {
 
 export type KeyType = 'secret' | 'publishable'
 
-/** One of the reader's own keys in the acting org. A secret key's value is never listed. */
-export interface OwnKey {
-  type: KeyType
-  prefix?: string
-  /** The whole value, for a publishable key only: it is public by construction. */
-  key?: string
-  createdAt?: string
-}
-
-export async function ownKeys(): Promise<OwnKey[]> {
-  return list<OwnKey>((await ask<{ keys?: unknown }>('/v1/account/keys')).keys)
-}
-
-/** Mints the reader's key of `type`, replacing the one they held, and answers it — once. */
-export async function mintKey(type: KeyType): Promise<string> {
-  const made = await ask<{ key?: string }>('/v1/account/keys', { method: 'POST', json: { type } })
-  if (!made?.key) throw new Refusal(502, 'IAM answered without a key.')
-  return made.key
-}
-
-export const revokeOwnKey = (type: KeyType): Promise<unknown> =>
-  ask(`/v1/account/keys?type=${type}`, { method: 'DELETE' })
-
-/** One of the org's keys, as IAM lists them: the secret half never leaves IAM. */
-export interface OrgKey {
-  owner: string
+/**
+ * One API key the reader may see: their own, or any key of an org they administer.
+ * Each is its own credential, so creating one never replaces another. A secret
+ * key's value is never listed; `key` carries it once, in the answer to a create.
+ */
+export interface ApiKey {
+  id: string
   name: string
-  displayName?: string
-  user?: string
-  scope?: string
-  state?: string
-  createdTime?: string
+  type: KeyType
+  /** The head of the credential, enough to tell which string it is. */
+  prefix?: string
+  /** The whole value: always for a publishable key, once for a new secret one. */
+  key?: string
+  status: 'active' | 'expired' | 'revoked' | 'disabled'
+  /** Who the key speaks for, `<org>/<user>`. */
+  creator?: string
+  created?: string
+  expires?: string
+  revoker?: string
+  revoked?: string
+  /** What the key may reach; empty reaches whatever its holder does. */
+  limit?: string[]
 }
 
-export async function orgKeys(org: string): Promise<OrgKey[]> {
-  return list<OrgKey>((await ask<{ keys?: unknown }>(`/v1/iam/keys?owner=${enc(org)}`)).keys)
+export async function keys(): Promise<ApiKey[]> {
+  return list<ApiKey>((await ask<{ keys?: unknown }>('/v1/account/keys')).keys)
 }
 
-export const revokeKey = (k: Pick<OrgKey, 'owner' | 'name'>): Promise<unknown> =>
-  ask(`/v1/iam/keys/${enc(k.owner)}/${enc(k.name)}`, { method: 'DELETE' })
+/** Creates a new key beside the ones held, and answers it with its value — once. */
+export async function createKey(input: { name?: string; type: KeyType }): Promise<ApiKey> {
+  const made = await ask<ApiKey>('/v1/account/keys', { method: 'POST', json: input })
+  if (!made?.key) throw new Refusal(502, 'IAM answered without a key.')
+  return made
+}
+
+/** Revokes exactly one key. It stays listed as revoked; every other key keeps working. */
+export const revokeKey = (id: string): Promise<ApiKey> =>
+  ask(`/v1/account/keys/${enc(id)}`, { method: 'DELETE' })
 
 // ── billing reads ───────────────────────────────────────────────────────────
 
