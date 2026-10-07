@@ -1763,12 +1763,11 @@ function Thread({
           // `center` on the surface, which spaces the pair from outside it,
           // because with a foot the composer is a shell around this frame and
           // a margin given here would land inside the shell.
-          // THE SAME MEASURE THE REST OF THIS FILE READS AT. The notice line and
-          // the error block are centred. A line of prose has a
-          // comfortable length and a field people write prose into has the same
-          // one.
+          // THE SAME MEASURE THE REST OF THIS FILE READS AT. The transcript's
+          // text sits at the measure less its own 0.75rem gutters, so the field
+          // is that wide too and its edges line up with the words above it.
           width: "calc(100% - 32px)",
-          maxW: `calc(${MEASURE} - 3rem)`,
+          maxW: `calc(${MEASURE} - 1.5rem)`,
           mx: "auto",
           ...(framed ? pane() : null),
           // THE COMPONENT'S OWN SHAPE, and nothing here reaching into it.
@@ -1829,7 +1828,7 @@ function Thread({
           // with its own remove, and the reason any file was refused.
           head:
             files.length || turnedAway || preparing || talk.open || talk.refusal || pause ? (
-              <YStack width="calc(100% - 32px)" maxW={`calc(${MEASURE} - 3rem)`} mx="auto" gap="$1.5">
+              <YStack width="calc(100% - 32px)" maxW={`calc(${MEASURE} - 1.5rem)`} mx="auto" gap="$1.5">
                 {/* TURNED AWAY: what paused, the ways past it, and the usage page. */}
                 {pause ? (
                   <LimitedBanner message={pause.message} actions={pause.actions} onAction={act} onUsage={() => showSettings("usage")} />
@@ -1930,8 +1929,10 @@ function Thread({
       />
       {/* The crew sits under the composer: who you can talk to, and the
           outline that makes one more. Below the field rather than in the hero
-          above it, so the question stays the first thing on the page. */}
-      <Crew />
+          above it, so the question stays the first thing on the page. It is
+          for starting a conversation: once something has been said the faces
+          are out of the way. */}
+      {said.length === 0 ? <Crew /> : null}
       {isFree(model) ? (
         <XStack
           items="center"
