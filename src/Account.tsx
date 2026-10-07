@@ -3,14 +3,15 @@
 /**
  * WHO YOU ARE, at the foot of the sidebar: the person, and the person's menu.
  *
- * Profile, appearance, usage, security and sign out — the account, and nothing that
- * belongs to the workspace. Which workspace you stand in is the switcher at the
- * TOP of the sidebar, and what it may spend is its Billing, so this card shows
- * neither: a balance here read as the person's money when it is the workspace's.
+ * Profile, appearance, usage, API keys, security and sign out — the account, and
+ * nothing that belongs to the workspace. Which workspace you stand in is the
+ * switcher at the TOP of the sidebar, and what it may spend is its Billing, so
+ * this card shows neither: a balance here read as the person's money when it is
+ * the workspace's.
  */
 
 import { useEffect, useRef, useState } from 'react'
-import { Activity, ChevronsUpDown, LogOut, PanelLeftClose, Palette, Shield, UserRound } from 'lucide-react'
+import { Activity, ChevronsUpDown, KeyRound, LogOut, PanelLeftClose, Palette, Shield, UserRound } from 'lucide-react'
 import { XStack, YStack, Text, Box } from '@hanzo/ui'
 import { sheet } from '@hanzo/ui/glass'
 import { useIam } from '@hanzo/iam/react'
@@ -47,6 +48,7 @@ export function Account({
   onProfile,
   onAppearance,
   onUsage,
+  onKeys,
 }: {
   onToggleCollapse?: () => void
   /** Opens the profile beside the room. Absent, the row goes to hanzo.id. */
@@ -55,6 +57,8 @@ export function Account({
   onAppearance?: () => void
   /** Opens the plan's usage settings. Absent, the row is not drawn. */
   onUsage?: () => void
+  /** Opens the API keys settings. Absent, the row is not drawn. */
+  onKeys?: () => void
 } = {}) {
   const { user } = useIam()
   const logout = useSignOut()
@@ -122,6 +126,11 @@ export function Account({
           {onUsage ? (
             <Row icon={<Activity size={15} aria-hidden />} onPress={act(onUsage)}>
               Usage
+            </Row>
+          ) : null}
+          {onKeys ? (
+            <Row icon={<KeyRound size={15} aria-hidden />} onPress={act(onKeys)}>
+              API keys
             </Row>
           ) : null}
           <Row icon={<Shield size={15} aria-hidden />} onPress={act(() => window.location.assign(link(`${iam()}/account/security`)))}>

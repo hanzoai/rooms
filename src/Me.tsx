@@ -8,8 +8,8 @@
 // switches with `pick()` (lib/auth/session.ts), the one switch the app has.
 // Under the list: Create organization, Organization settings, and Hanzo Team —
 // opened in the same organization for a team, offered as "Create a team" for a
-// personal one. Then the balance with Add funds, Settings, Usage, the plans,
-// help and Log out. A SuperAdmin also gets All organizations (support mode).
+// personal one. Then the balance with Add funds, Settings, Usage, API keys, the
+// plans, help and Log out. A SuperAdmin also gets All organizations (support mode).
 //
 // IAM is the source of every fact here: names and roles from the token's `orgs`
 // claim, display names and which org is personal from `GET /v1/iam/organizations`,
@@ -19,7 +19,7 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { Popover, SizableText, View, XStack, YStack } from '@hanzo/gui'
-import { Building2, ChevronsUpDown, ExternalLink, Gauge, LifeBuoy, LogOut, Plus, Settings, Sparkles, Users, X } from 'lucide-react'
+import { Building2, ChevronsUpDown, ExternalLink, Gauge, KeyRound, LifeBuoy, LogOut, Plus, Settings, Sparkles, Users, X } from 'lucide-react'
 import { path, useWho, type Host } from '@hanzo/build'
 import { useOrganizations } from '@hanzo/iam/react'
 import { Button, Dialog, DialogContent, DialogTitle, Input } from '@hanzo/ui'
@@ -41,6 +41,8 @@ import { BAD } from './lib/mix'
 const DOCS = 'https://docs.hanzo.ai/docs/dev'
 /** Where an organization's own settings live. */
 const ORG_SETTINGS = '/settings/organization'
+/** The organization's API keys: many per person, each created and revoked on its own. */
+const KEYS = `${ORG_SETTINGS}/keys`
 /** An organization this tab created, until the token carries it. */
 const MADE = 'hanzo:org:made'
 
@@ -361,6 +363,7 @@ export function Me({
             />
             <Item icon={<Settings size={15} aria-hidden />} label="Settings" onPress={() => go(path({ kind: 'settings', section: 'general' }))} />
             <Item icon={<Gauge size={15} aria-hidden />} label="Usage" onPress={() => go(path({ kind: 'settings', section: 'usage' }))} />
+            <Item icon={<KeyRound size={15} aria-hidden />} label="API keys" onPress={() => (menu.onOpenChange(false), window.location.assign(KEYS))} />
             <Item icon={<Sparkles size={15} aria-hidden />} label="View all plans" onPress={() => go(path({ kind: 'screen', screen: 'plans' }))} />
             <Item icon={<LifeBuoy size={15} aria-hidden />} label="Get help" onPress={() => (menu.onOpenChange(false), window.open(DOCS, '_blank', 'noopener,noreferrer'))} />
             {host.signOut ? (

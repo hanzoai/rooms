@@ -2387,13 +2387,15 @@ function Frame({
               Upgrade
             </SidebarItem>
             {/* WHO YOU ARE, at the foot: the person's menu — profile,
-                appearance, security, sign out. The workspace switcher is at
-                the top, and credits live under Billing, so neither is here. */}
+                appearance, usage, API keys, security, sign out. The workspace
+                switcher is at the top, and credits live under Billing, so
+                neither is here. */}
             <Account
               onToggleCollapse={toggle}
               onProfile={() => setProfiling(true)}
               onAppearance={() => showSettings("general")}
               onUsage={() => showSettings("usage")}
+              onKeys={() => showSettings("keys")}
             />
           </>
         ) : null
