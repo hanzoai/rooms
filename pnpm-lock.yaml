@@ -7,8 +7,8 @@ settings:
 catalogs:
   default:
     '@hanzo/ai':
-      specifier: 0.6.20
-      version: 0.6.20
+      specifier: 0.6.23
+      version: 0.6.23
     '@hanzo/appearance':
       specifier: 0.2.8
       version: 0.2.8
@@ -111,7 +111,7 @@ importers:
     devDependencies:
       '@hanzo/ai':
         specifier: 'catalog:'
-        version: 0.6.20(react@19.2.8)
+        version: 0.6.23(react@19.2.8)
       '@hanzo/appearance':
         specifier: 'catalog:'
         version: 0.2.8(react@19.2.8)
@@ -563,8 +563,8 @@ packages:
   '@floating-ui/utils@0.2.12':
     resolution: {integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==}
 
-  '@hanzo/ai@0.6.20':
-    resolution: {integrity: sha512-6OWkWbi/6loJ4gc3w5HEttwrqi+YxUd4xQV461jHvPO6lBhhCscFUmZSppCXTPgI74npIrGOiRFYqjM/T0m+nQ==}
+  '@hanzo/ai@0.6.23':
+    resolution: {integrity: sha512-AscNorBuEKgS26oMzfW+4dkqu04LMSU1lWW+ONglf1bqsvD3RXf8ARO/3WgE3zXpUcohIQgGlIYmUsoMv/T5hQ==}
     engines: {node: '>=18'}
     peerDependencies:
       react: '>=19.2.8'
@@ -3730,7 +3730,7 @@ snapshots:
 
   '@floating-ui/utils@0.2.12': {}
 
-  '@hanzo/ai@0.6.20(react@19.2.8)':
+  '@hanzo/ai@0.6.23(react@19.2.8)':
     optionalDependencies:
       react: 19.2.8
 

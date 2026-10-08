@@ -220,7 +220,7 @@ export function Column({
           ) : null}
         </YStack>
         <XStack height={1} bg="$borderColor" mx="$1.5" mt="$3" shrink={0} />
-        <Recents host={host} mode={mode} thread={thread} words={words} onOpen={open} />
+        <Recents host={host} mode={mode} thread={thread} words={words} onOpen={open} onNew={create} />
         <YStack gap="$2" pt="$2" shrink={0}>
           <Made />
           <Setup />

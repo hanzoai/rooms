@@ -1,21 +1,23 @@
 'use client'
 
 // The reader's Recents in the column's mode, and only that mode's: Chat lists its
-// conversations (`/v1/agents/chat/conversations`, @hanzo/ai `useThreads`), Dev its
+// conversations (`/v1/agents/chat/conversations`, `useThreadList`), Dev its
 // coding runs (`/v1/agent/sessions?kind=coding`, @hanzo/build `useSessions`). Each
 // mode reads its own store. The menu beside the heading narrows, groups and sorts
-// the list; the choice is kept per mode in this browser.
+// the list; the choice is kept per mode in this browser. A conversation's row
+// carries its own menu (thread.tsx): pinned ones list first, under Pinned, and
+// Chat's Status shows the archived ones apart.
 
 import { useEffect, useId, useMemo, useRef } from 'react'
 import { ScrollView, SizableText, XStack, YStack } from '@hanzo/gui'
 import { ListFilter, MessageSquare } from 'lucide-react'
-import { useThreads } from '@hanzo/ai/react'
+import type { Thread } from '@hanzo/ai'
 import { DOTS, route, useSessions, type Host } from '@hanzo/build'
 import { DropdownMenu, type DropdownMenuProps } from '@hanzo/ui'
 import { SidebarItem, StatusDot } from '@hanzo/ui/chat'
 import { useKept } from './kept'
 import { ago, arrange, chats, MENUS, PLAIN, runs, SINCE, viewOf, type Mode, type Option, type Recent, type View } from './recent'
-import { useStarred } from './stars'
+import { ThreadRow, useThreadList } from './thread'
 
 /** The menu's items: each section a heading and its options, the one in force checked. */
 function items(mode: Mode, view: View, set: (v: View) => void): NonNullable<DropdownMenuProps['items']> {
@@ -51,6 +53,7 @@ export function Recents({
   thread,
   words,
   onOpen,
+  onNew,
 }: {
   host: Host
   mode: Mode
@@ -58,37 +61,56 @@ export function Recents({
   thread: string | null
   words: string
   onOpen: (r: Recent) => void
+  /** Moves the pane to a new conversation: where it goes when the one it holds is deleted. */
+  onNew: () => void
 }) {
-  return mode === 'chat' ? <Chats thread={thread} words={words} onOpen={onOpen} /> : <Runs host={host} words={words} onOpen={onOpen} />
+  const [kept, keep] = useKept<unknown>(`hanzo.recents.${mode}`, PLAIN)
+  const view = viewOf(mode, kept)
+  return mode === 'chat' ? (
+    <Chats thread={thread} words={words} view={view} keep={keep} onOpen={onOpen} onNew={onNew} />
+  ) : (
+    <Runs host={host} words={words} view={view} keep={keep} onOpen={onOpen} />
+  )
 }
 
-/** Chat's Recents: the conversation store alone. */
-function Chats({ thread, words, onOpen }: { thread: string | null; words: string; onOpen: (r: Recent) => void }) {
-  const store = useThreads()
-  // A conversation this list has not seen is one just begun: read the store again, once for it.
-  const asked = useRef(new Set<string>())
-  const reload = store.reload
-  useEffect(() => {
-    if (!thread || store.loading || asked.current.has(thread) || store.threads.some((t) => t.id === thread)) return
-    asked.current.add(thread)
-    reload()
-  }, [thread, store.loading, store.threads, reload])
+/** Chat's Recents: the conversation store alone, the archived ones when the view asks for them. */
+function Chats({
+  thread,
+  words,
+  view,
+  keep,
+  onOpen,
+  onNew,
+}: {
+  thread: string | null
+  words: string
+  view: View
+  keep: (v: View) => void
+  onOpen: (r: Recent) => void
+  onNew: () => void
+}) {
+  const store = useThreadList(view.status === 'archived', thread)
   const rows = useMemo(() => chats(store.threads), [store.threads])
+  const byId = useMemo(() => new Map(store.threads.map((t) => [t.id, t])), [store.threads])
   return (
     <List
       mode="chat"
       rows={rows}
       words={words}
+      view={view}
+      keep={keep}
       open={(r) => r.id === thread}
       reading={store.loading && !store.threads.length}
       error={store.error}
       onOpen={onOpen}
+      threads={byId}
+      onNew={onNew}
     />
   )
 }
 
 /** Dev's Recents: the org's coding runs alone. */
-function Runs({ host, words, onOpen }: { host: Host; words: string; onOpen: (r: Recent) => void }) {
+function Runs({ host, words, view, keep, onOpen }: { host: Host; words: string; view: View; keep: (v: View) => void; onOpen: (r: Recent) => void }) {
   const store = useSessions(host)
   const r = route(host.path)
   const run = r.kind === 'run' ? r.id : null
@@ -106,6 +128,8 @@ function Runs({ host, words, onOpen }: { host: Host; words: string; onOpen: (r: 
       mode="dev"
       rows={rows}
       words={words}
+      view={view}
+      keep={keep}
       open={(row) => row.id === run}
       reading={store.loading && !store.value.length}
       error={store.error}
@@ -118,31 +142,36 @@ function List({
   mode,
   rows,
   words,
+  view,
+  keep,
   open,
   reading,
   error,
   onOpen,
+  threads,
+  onNew,
 }: {
   mode: Mode
   rows: Recent[]
   words: string
+  view: View
+  keep: (v: View) => void
   open: (r: Recent) => boolean
   reading: boolean
   error: Error | null | undefined
   onOpen: (r: Recent) => void
+  /** Chat's conversations by id: a row of one carries its menu. */
+  threads?: Map<string, Thread>
+  onNew?: () => void
 }) {
-  const [kept, keep] = useKept<unknown>(`hanzo.recents.${mode}`, PLAIN)
-  const view = viewOf(mode, kept)
-  const [starred] = useStarred('threads')
   const label = useId()
-  const groups = arrange(rows, view, words, starred)
+  const groups = arrange(rows, view, words)
   const narrowed = view.status !== PLAIN.status || view.since !== PLAIN.since
   const now = new Date()
   const running = mode === 'dev' ? rows.filter((r) => r.status === 'running').length : 0
   const row = (r: Recent) => {
     const when = ago(r.at, now)
-    return (
-      <YStack role="listitem" key={r.id} position="relative">
+    const item = (
         <SidebarItem
           data-kind={r.kind}
           active={open(r)}
@@ -167,24 +196,29 @@ function List({
         >
           {r.title}
         </SidebarItem>
-        {when ? (
-          // How long ago, at the row's end; the full time is its title.
-          <SizableText
-            position="absolute"
-            r="$2"
-            t={0}
-            b={0}
-            size="$1"
-            color="$soft"
-            pointerEvents="none"
-            display="flex"
-            items="center"
-            fontVariant={['tabular-nums']}
-          >
-            <time dateTime={r.at} title={new Date(r.at).toLocaleString()}>
-              {when}
-            </time>
-          </SizableText>
+    )
+    // How long ago, at the row's end; the full time is its title.
+    const age = when ? (
+      <SizableText size="$1" color="$soft" pointerEvents="none" display="flex" items="center" fontVariant={['tabular-nums']}>
+        <time dateTime={r.at} title={new Date(r.at).toLocaleString()}>
+          {when}
+        </time>
+      </SizableText>
+    ) : null
+    const t = threads?.get(r.id)
+    if (t)
+      return (
+        <ThreadRow key={r.id} t={t} active={open(r)} aside={age} onGone={onNew}>
+          {item}
+        </ThreadRow>
+      )
+    return (
+      <YStack role="listitem" key={r.id} position="relative">
+        {item}
+        {age ? (
+          <XStack position="absolute" r="$2" t={0} b={0} items="center" pointerEvents="none">
+            {age}
+          </XStack>
         ) : null}
       </YStack>
     )
@@ -250,6 +284,8 @@ function List({
           <Note>{mode === 'chat' ? 'Reading your chats…' : 'Reading your runs…'}</Note>
         ) : error ? null : words.trim() ? (
           <Note>{`Nothing matches “${words.trim()}”.`}</Note>
+        ) : view.status === 'archived' ? (
+          <Note>No archived chats.</Note>
         ) : narrowed ? (
           <Note>Nothing in this view.</Note>
         ) : (

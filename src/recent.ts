@@ -13,11 +13,13 @@ export interface Recent {
   began: string
   status?: string
   project?: string
+  /** A conversation its person pinned: listed first, under Pinned. */
+  pinned?: boolean
 }
 
-export type Status = 'all' | 'running' | 'paused' | 'done' | 'error' | 'stopped'
+export type Status = 'all' | 'running' | 'paused' | 'done' | 'error' | 'stopped' | 'archived'
 export type Since = 'any' | 'day' | 'week' | 'month'
-export type Group = 'date' | 'state' | 'project' | 'starred' | 'none'
+export type Group = 'date' | 'state' | 'project' | 'none'
 export type Sort = 'activity' | 'created' | 'title'
 
 /** How the list is narrowed, grouped and sorted. */
@@ -49,11 +51,14 @@ export const SINCE: Option<Since>[] = [
 
 /** What each mode's menu offers, section by section, as Claude's Recents menu does. */
 export const MENUS: Record<Mode, { status: Option<Status>[]; group: Option<Group>[]; sort: Option<Sort>[] }> = {
+  // A chat's status is whether it is archived: the store lists the two apart.
   chat: {
-    status: [],
+    status: [
+      { id: 'all', label: 'Active' },
+      { id: 'archived', label: 'Archived' },
+    ],
     group: [
       { id: 'date', label: 'Date' },
-      { id: 'starred', label: 'Starred' },
       { id: 'none', label: 'None' },
     ],
     sort: [
@@ -90,9 +95,17 @@ export function viewOf(mode: Mode, kept: unknown): View {
   }
 }
 
-/** Chat's conversations as rows. */
-export function chats(threads: { id: string; title?: string; updatedAt?: string }[]): Recent[] {
-  return threads.map((t) => ({ kind: 'chat', id: t.id, title: t.title || 'Untitled', at: t.updatedAt ?? '', began: t.updatedAt ?? '' }))
+/** Chat's conversations as rows: an archived one's status says so. */
+export function chats(threads: { id: string; title?: string; updatedAt?: string; pinned?: boolean; archived?: boolean }[]): Recent[] {
+  return threads.map((t) => ({
+    kind: 'chat',
+    id: t.id,
+    title: t.title || 'Untitled',
+    at: t.updatedAt ?? '',
+    began: t.updatedAt ?? '',
+    ...(t.archived ? { status: 'archived' } : {}),
+    ...(t.pinned ? { pinned: true } : {}),
+  }))
 }
 
 /** Dev's runs as rows. */
@@ -131,10 +144,11 @@ const newest = (a: string, b: string) => (a < b ? 1 : a > b ? -1 : 0)
 
 /**
  * The list as drawn: the rows the view and the words admit, sorted, and cut into
- * headed groups in the order they read. A view grouped by None is one group with
+ * headed groups in the order they read. Pinned rows come first, under Pinned,
+ * whatever the grouping; a view grouped by None holds the rest in one group with
  * no heading.
  */
-export function arrange(rows: Recent[], view: View, words: string, starred: Set<string>, now = new Date()): { title: string; rows: Recent[] }[] {
+export function arrange(rows: Recent[], view: View, words: string, now = new Date()): { title: string; rows: Recent[] }[] {
   const w = words.trim().toLowerCase()
   const kept = rows.filter(
     (r) =>
@@ -153,23 +167,25 @@ export function arrange(rows: Recent[], view: View, words: string, starred: Set<
         return STATE[r.status ?? ''] ?? 'Other'
       case 'project':
         return r.project || 'No project'
-      case 'starred':
-        return starred.has(r.id) ? 'Starred' : 'Others'
       default:
         return ''
     }
   }
   const groups: { title: string; rows: Recent[] }[] = []
   for (const r of kept) {
+    if (r.pinned) continue
     const title = headOf(r)
     const g = groups.find((one) => one.title === title)
     if (g) g.rows.push(r)
     else groups.push({ title, rows: [r] })
   }
-  if (view.group === 'starred') groups.sort((a, b) => (a.title === 'Starred' ? -1 : b.title === 'Starred' ? 1 : 0))
   if (view.group === 'date') groups.sort((a, b) => DAYS.indexOf(a.title) - DAYS.indexOf(b.title))
-  return groups
+  const pinned = kept.filter((r) => r.pinned)
+  return pinned.length ? [{ title: PINNED, rows: pinned }, ...groups] : groups
 }
+
+/** The heading pinned rows read under, first in every view. */
+export const PINNED = 'Pinned'
 
 
 /**

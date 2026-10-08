@@ -65,7 +65,7 @@ import { useHydrated } from "./lib/hydrated";
 import { base, served } from "./lib/ai";
 import { onServed, type Served } from "./lib/served";
 import { refused as worded, speech, useDictation, useTalk, useVoice, Voice } from "@hanzo/voice";
-import { ArrowUp, AudioLines, FileText, Image as ImageMark, Mic, Paperclip, Square, Star, PanelRight, X } from "lucide-react";
+import { ArrowUp, AudioLines, FileText, Image as ImageMark, Mic, Paperclip, Pin, Square, PanelRight, X } from "lucide-react";
 import { ENSO, FREE } from "./lib/ai";
 import { openThread, showSettings, useOpen } from "./open";
 import { Beside, Framed } from "./Shell";
@@ -74,7 +74,7 @@ import { RightPane, addressOf, look, usePinned, type Mark } from "./RightPane";
 import { useMedia } from "@hanzo/gui";
 import { Take } from "./copy";
 import { Share } from "./Share";
-import { useStarred } from "./stars";
+import { useThreadActions, useThreadList } from "./thread";
 import { useModel } from "./model";
 import { Enso, nameOf, useEffort } from "./enso";
 import { checkoutUrl } from './lib/pay';
@@ -707,10 +707,6 @@ function Thread({
    * that settles after mount. Picking from the menu still wins, permanently.
    */
   const [asking, setAsking] = useState<string | null>(null);
-  // STARRED HERE, READ IN THE COLUMN — the shape a room and a project already
-  // have. hanzo.chat called it a bookmark; the word this site uses is starred,
-  // and one word for one act is what keeps the three lists reading alike.
-  const [starred, star] = useStarred("threads");
   // The setter is taken now, not just the value: the override moved from
   // Settings into the composer's own panel, so this is where it is written.
   const [preferred, setPreferred] = useModel();
@@ -720,6 +716,13 @@ function Thread({
   const framed = useContext(Framed);
   const opened = useOpen();
   const { thread: open, open: reopen, agents: room, openAgent, seat, emptied, aside, showAside, showSettings } = opened;
+  // PINNED HERE, READ IN THE COLUMN, and kept by the server (thread.tsx): the
+  // pin this header sets is the one the row's menu sets, on every device the
+  // reader signs in on. A conversation not in the list yet (just begun, or
+  // archived) reads unpinned.
+  const listing = useThreadList(false, open);
+  const acts = useThreadActions();
+  const mine = open ? listing.threads.find((t) => t.id === open) : undefined;
   // The conversation's key in `pane.ts`, the one the column beside it reads.
   const at = channel(opened);
   // The first of them: what a surface that addresses one person reads.
@@ -1529,25 +1532,21 @@ function Thread({
         borderColor="$borderColor"
       >
         <XStack items="center" gap="$2" minW={0}>
-          {/* THE SAME STAR AS A PROJECT'S, said the same way — see Build.tsx.
-              This one named itself "Star conversation" whatever the state, so
-              the label was wrong the moment a reader starred anything, and the
-              only signal that the press had worked was the icon turning
-              yellow: a state carried by COLOUR ALONE, which a screen reader
-              cannot read at all. The label says what the press will do and
-              aria-pressed says where it stands. */}
+          {/* The label says what the press will do and aria-pressed says where
+              it stands: a state carried by colour alone is one a screen reader
+              cannot read. Nothing to pin until the conversation is listed. */}
           <Box
             render="button"
-            onClick={() => open && star(open)}
-            aria-label={
-              open && starred.has(open) ? "Unstar this conversation" : "Star this conversation"
-            }
-            aria-pressed={!!open && starred.has(open)}
+            onClick={() => mine && void acts.pin(mine)}
+            aria-disabled={!mine}
+            aria-label={mine?.pinned ? "Unpin this conversation" : "Pin this conversation"}
+            aria-pressed={!!mine?.pinned}
             p="$1.5"
             rounded="$2"
+            opacity={mine ? 1 : 0.5}
             hoverStyle={{ bg: '$hover' }}
           >
-            <Star size={15} aria-hidden color={open && starred.has(open) ? "var(--foreground)" : "var(--muted-foreground)"} fill={open && starred.has(open) ? "currentColor" : "none"} />
+            <Pin size={15} aria-hidden color={mine?.pinned ? "var(--foreground)" : "var(--muted-foreground)"} fill={mine?.pinned ? "currentColor" : "none"} />
           </Box>
           {/* WHO IS AT THE OTHER END, or nothing at all.
               `withWhom || "Jobs"` put a name and a photograph on a room the

@@ -71,8 +71,10 @@ import {
   useInbox,
   useModels,
   usePeople,
-  useThreads,
 } from "@hanzo/ai/react";
+import type { Thread } from "@hanzo/ai";
+import { PINNED } from "./recent";
+import { ThreadRow, useThreadList } from "./thread";
 import { Box, XStack, YStack, Text } from "@hanzo/ui";
 // THE PAPER LADDER. `sheet(n)` is a fill AND the light on it, published as a
 // pair by @hanzo/design, so a surface asks for a HEIGHT instead of composing a
@@ -547,7 +549,7 @@ function Chats({
   // lease-agreement file search" — banded under Today and Yesterday like a
   // history somebody had. A visitor's first sight of the app was ten chats they
   // had never had, and every one of them opened nothing.
-  const { threads, loading, error: wrong } = useThreads();
+  const { threads, loading, error: wrong } = useThreadList(false, thread);
   const [customThreads, setCustomThreads] = useState<CustomThread[]>([]);
 
   useEffect(() => {
@@ -560,13 +562,13 @@ function Chats({
   const { isAuthenticated, user } = useIam();
   const { user: account } = useAccount();
   const signedIn = isAuthenticated || Boolean(user) || Boolean(account) || hasSession();
-  const [starred] = useStarred("threads");
 
   const mergedThreads = useMemo(() => {
-    const list: Array<{ id: string; title: string; updatedAt: any; kind?: "call" | "group" }> = threads.map((t) => ({
+    const list: Array<{ id: string; title: string; updatedAt: any; kind?: "call" | "group"; thread?: Thread }> = threads.map((t) => ({
       id: t.id,
       title: t.title || "Untitled",
       updatedAt: t.updatedAt,
+      thread: t,
     }));
     for (const ct of customThreads) {
       if (!list.some((t) => t.id === ct.id)) {
@@ -583,16 +585,17 @@ function Chats({
 
   const found = mergedThreads.filter((t) => matches(t.title || "Untitled", filter));
 
-  const shown = found.filter((t) => !starred.has(t.id));
-  const kept = found.filter((t) => starred.has(t.id));
+  // PINNED FIRST, by the server's pin (thread.tsx), then the days.
+  const shown = found.filter((t) => !t.thread?.pinned);
+  const kept = found.filter((t) => t.thread?.pinned);
 
   const bands: { label: string; rows: typeof shown }[] = [];
-  if (kept.length) bands.push({ label: "Starred", rows: kept });
+  if (kept.length) bands.push({ label: PINNED, rows: kept });
   const now = new Date();
   for (const t of shown) {
     const label = when(t.updatedAt, now);
     const last = bands[bands.length - 1];
-    if (last && last.label === label && last.label !== "Starred") last.rows.push(t);
+    if (last && last.label === label && last.label !== PINNED) last.rows.push(t);
     else bands.push({ label, rows: [t] });
   }
 
@@ -613,7 +616,8 @@ function Chats({
       {mine}
       {mine ? null : bands.map((band) => (
         <SidebarSection key={band.label} label={band.label}>
-          {band.rows.map((t) => (
+          {band.rows.map((t) => {
+            const item = (
             <SidebarItem
               key={t.id}
               active={t.id === thread}
@@ -634,7 +638,16 @@ function Chats({
                 <Span id={t.id} updatedAt={t.updatedAt} />
               </YStack>
             </SidebarItem>
-          ))}
+            );
+            // A stored conversation carries its menu; a call or a group is no conversation of the store's.
+            return t.thread ? (
+              <ThreadRow key={t.id} t={t.thread} active={t.id === thread} listed={false}>
+                {item}
+              </ThreadRow>
+            ) : (
+              item
+            );
+          })}
         </SidebarSection>
       ))}
       <SharedWithYou filter={filter} onPick={onPick} />
