@@ -8,12 +8,12 @@
 // to leave. The name drawn at the top left is Hanzo Dev: this host is the
 // dev agent. Chat, on the rooms shell, is Hanzo AI.
 //
-// THE ADDRESS IS THE QUERY. The app is `/` (app/page.tsx), and what it shows
-// rides `?at=` in the builder's own grammar (lib/host.ts `AT`), so a run, a
+// THE ADDRESS IS THE PATH. Dev is `/dev`, and what it shows is the path under
+// it in the builder's own grammar (lib/host.ts `app`, `under`), so a run, a
 // screen, a Settings section, a Customize tab, the plans and a project all
 // survive a reload, and Back steps through them. A move is a native history
-// entry, which the Next router folds into `useSearchParams`, so reading the
-// address and moving it are one query.
+// entry, which the Next router folds into `usePathname`, so reading the address
+// and moving it are one path.
 
 import { useMemo } from 'react'
 import { useLook, useRooms } from './host'
@@ -23,7 +23,7 @@ import { administers, path, route, type Host } from '@hanzo/build'
 import { bearer, named, org, orgs, pick } from './lib/session'
 import { enter } from './lib/destination'
 import { api } from './lib/api'
-import { app, AT } from './lib/host'
+import { app, under } from './lib/host'
 import { link } from './lib/tags'
 
 /** Where the builder links out: every one of them an address of this site. */
@@ -37,15 +37,15 @@ const LINKS: Host['links'] = {
 /** The person's theme, when they have chosen one the builder can name. */
 const theme = (t: string | undefined): Host['theme'] => (t === 'light' || t === 'dark' || t === 'system' ? t : undefined)
 
-/** The app address a query value names, canonical; '' for anything that is not one. */
+/** The app address a builder path names, canonical; '' for anything that is not one. */
 const canonical = (at: string | null): string => path(route(at ?? ''))
 
 /** The host for a signed-in reader. */
 export function useDevHost(): Host {
   const { user, accessToken } = useIam()
   const logout = useSignOut()
-  const { router, search } = useRooms()
-  const here = canonical(search?.get(AT) ?? null)
+  const { router, path: pathname } = useRooms()
+  const here = canonical(under(pathname))
   const look = useLook()
 
   // The token's claims change only when the token does: a sign-in, a refresh.
@@ -79,7 +79,7 @@ export function useDevHost(): Host {
       path: here,
       go: (to, how) => {
         const next = app(canonical(to))
-        if (`${window.location.pathname}${window.location.search}` === next) return
+        if (window.location.pathname === next && !window.location.search) return
         if (how?.replace) window.history.replaceState(null, '', next)
         else window.history.pushState(null, '', next)
       },

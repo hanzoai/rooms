@@ -15,7 +15,7 @@
  * Two derivations of one name never agree; this is the one derivation.
  */
 
-import { AT, TALK } from './host'
+import { TALK } from './host'
 import { api } from './api'
 
 /** The SDK's own keys, `hanzo_iam_`-prefixed. The far side of a boundary. */
@@ -62,12 +62,13 @@ export function live(): boolean {
 export const APP = 'data-app'
 
 /**
- * An address on `/` that names a place in the app — `?at=` in Dev, `?chat` in
- * Chat (lib/host.ts `AT`, `TALK`). The app is signed-in only, so a reader
- * nobody has signed in is sent to hanzo.id with it rather than shown the
- * landing, and it comes back with them.
+ * An address on `/` that names a place in the app — `?chat` in Chat
+ * (lib/host.ts `TALK`; Dev's places are paths under `/dev`, whose own page
+ * signs a stranger in). The app is signed-in only, so a reader nobody has
+ * signed in is sent to hanzo.id with it rather than shown the landing, and it
+ * comes back with them.
  */
-const PLACE = new RegExp(`[?&](?:${AT}|${TALK})(?:[=&]|$)`)
+const PLACE = new RegExp(`[?&]${TALK}(?:[=&]|$)`)
 
 /** Whether `search` names a place in the app. */
 export const place = (search: string): boolean => PLACE.test(search)

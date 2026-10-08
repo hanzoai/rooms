@@ -37,52 +37,64 @@ export const ENTRY = `${WORKSPACE}/?signin`
 export const START = `${WORKSPACE}/start`
 
 /**
- * The web app, at `/` for a signed-in reader, in two modes. Chat is the default.
- * Dev is @hanzo/build's `<Builder>`, and what it shows rides ONE query, `?at=`,
- * in the builder's own grammar (`route` in @hanzo/build): '' New, `sess_<id>` a
- * run, `-/<screen>`, `-/settings[/<section>]`, `-/customize[/<tab>]`,
- * `-/plans`, `<slug>` a project. A query and not a path, because a static
- * export has no server to answer a path under `/`.
+ * The web app, for a signed-in reader, in two modes. Chat is the default, at
+ * `/`. Dev is @hanzo/build's `<Builder>` at `/dev`, and what it shows is the
+ * PATH under it, in the builder's own grammar (`route` in @hanzo/build): `/dev`
+ * New, `/dev/sess_<id>` a run, `/dev/<org>/<repo>` a project,
+ * `/dev/-/<screen>`, `/dev/-/settings[/<section>]`, `/dev/-/customize[/<tab>]`,
+ * `/dev/<slug>` a deployed site. The export holds one page for all of them,
+ * `/dev`, and the edge serves it for every path under it (hanzo.ai's
+ * lib/edge.ts `APP`).
  */
-export const AT = 'at'
+export const DEV = '/dev'
 
-/** `/` in Dev at an app address; '' is Dev's New, `/?at=`. The key is the mode. */
-export const app = (path: string): string => `/?${AT}=${path}`
+/** Dev at an app address; '' is Dev's New, `/dev` itself. */
+export const app = (path: string): string => {
+  const p = path.replace(/^\/+|\/+$/g, '')
+  return p ? `${DEV}/${p}` : DEV
+}
+
+/** The app address a pathname names under `/dev`, or null for a pathname that is not Dev's. */
+export const under = (pathname: string | null | undefined): string | null => {
+  if (!pathname) return null
+  if (pathname === DEV || pathname === `${DEV}/`) return ''
+  if (!pathname.startsWith(`${DEV}/`)) return null
+  try {
+    return decodeURIComponent(pathname.slice(DEV.length + 1))
+  } catch {
+    return ''
+  }
+}
 
 /**
  * Chat, the app's default mode: `/` is a new conversation and `?chat=<id>` one
- * of the reader's. So the address says which mode the app is in — `at` for Dev,
- * anything else Chat — and a reload keeps it.
+ * of the reader's. So the address says which mode the app is in — a path under
+ * `/dev` for Dev, anything else Chat — and a reload keeps it.
  */
 export const TALK = 'chat'
 
 /** `/` in Chat, on a conversation, or `/` itself for a new one. */
 export const talk = (id?: string | null): string => (id ? `/?${TALK}=${encodeURIComponent(id)}` : '/')
 
-/**
- * The door into the app: every "Try Hanzo Dev" link, the rail's Dev, the
- * console's "open in the builder", dev.hanzo.ai. It signs a stranger in and
- * forwards a member to Dev in the app, `/?at=` (app/(app)/dev/_door.tsx). It is
- * the app's page, so it is reached through `site()`: here on hanzo.ai, across
- * to hanzo.ai from hanzo.team.
- */
-const DEV = '/dev'
-
 /** A run, as the platform mints its id. */
 const SESSION = /^sess_[0-9a-f]{32}$/
 
-/** A project, as the Sites plane slugs it. */
+/** A deployed site, as the Sites plane slugs it. */
 const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/
 
+/** A repository on the forge, `<org>/<name>`. */
+const REPO = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\/[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
+
 /**
- * The door opened on one run or project: `?run=` or `?project=`, the query the
- * door turns into `?at=` — and the one the console and shared links already
- * carry. Only a value that is exactly a session id or a project slug is
- * carried; anything else opens /dev itself, so no caller can make this name
- * another address.
+ * Dev opened on one run, project or site, from anywhere: every "Try Hanzo Dev"
+ * link, a room's Dev, the console's "open in the builder". It signs a stranger
+ * in on the way (app/(app)/dev/_door.tsx), and is reached through `site()`:
+ * here on hanzo.ai, across to hanzo.ai from hanzo.team. Only a value that is
+ * exactly a session id, a repository or a site's slug is carried; anything else
+ * opens /dev itself, so no caller can make this name another address.
  */
 export const dev = (ref?: string | null): string =>
-  site(!ref ? DEV : SESSION.test(ref) ? `${DEV}?run=${ref}` : SLUG.test(ref) ? `${DEV}?project=${ref}` : DEV)
+  site(ref && (SESSION.test(ref) || REPO.test(ref) || SLUG.test(ref)) ? app(ref) : DEV)
 
 /** The routes under app/(app) the apex keeps: the app — /chat, a chat shared by link, and /dev. */
 const KEPT = new Set(['/chat', '/chat/shared', '/dev'])

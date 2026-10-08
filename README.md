@@ -11,13 +11,13 @@ import { CalScheduler } from '@hanzo/rooms/CalScheduler'
 
 configure({ site: '', home: '/home', signUp: '/signup' })
 
-<Rooms router={router} search={search} route={route} Link={Link}>
+<Rooms router={router} search={search} path={pathname} route={route} Link={Link}>
   <Room mode="cal"><CalScheduler /></Room>
 </Rooms>
 ```
 
 `configure()` names the host's addresses (where its own pages live, the
 gateway and IAM, the plan catalogue to paint first). `<Rooms>` carries what
-moves: the router, the query, the route and the link component. The rooms
+moves: the router, the query, the path, the route and the link component. The rooms
 import nothing from a host, and their look comes from `@hanzo/appearance` and
 `@hanzo/design` through `@hanzo/ui`.

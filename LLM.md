@@ -28,10 +28,17 @@ configure({ site: '', home: '/home', signUp: '/signup', api, iam, key, plans })
 
 ```tsx
 // Where the rooms render (client: host.tsx).
-<Rooms router={useRouter()} search={useSearchParams()} route={route} Link={NextLink}>
+<Rooms router={useRouter()} search={useSearchParams()} path={usePathname()} route={route} Link={NextLink}>
   <Room mode="cal"><CalScheduler /></Room>
 </Rooms>
 ```
+
+Dev's address is a PATH under `/dev` (lib/host.ts `app`, `under`): `/dev` New,
+`/dev/sess_<id>` a run, `/dev/<org>/<repo>` a project (a repository on the
+forge), `/dev/-/<screen>`, `/dev/<slug>` a deployed site. `useDevHost` reads it
+from `path`; the host serves its one Dev page for every path under `/dev`
+(hanzo.ai: lib/edge.ts `APP`). `dev(ref)` opens Dev on a run, a repository or a
+site from any surface.
 
 | address | hanzo.ai | hanzo.team |
 |---|---|---|

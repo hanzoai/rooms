@@ -9,7 +9,7 @@
  *
  *   configure({ site: 'https://hanzo.ai', home: '/', signUp: '/start' })
  *
- *   <Rooms router={useRouter()} search={useSearchParams()} route={route} Link={Link}>
+ *   <Rooms router={useRouter()} search={useSearchParams()} path={usePathname()} route={route} Link={Link}>
  *     <Room mode="cal" />
  *   </Rooms>
  *
@@ -19,7 +19,7 @@
  * any component and on pages the rooms never draw. So the host states them once
  * with `configure()`, in a module its root imports, before anything renders.
  *
- * The ROUTER, the query and the route change as the page moves, so they ride
+ * The ROUTER, the query, the path and the route change as the page moves, so they ride
  * React context, and a room reads them with `useRooms()`.
  */
 
@@ -41,15 +41,19 @@ export interface Router {
 
 interface Moving {
   router: Router
-  /** The address's query, for the rooms that read one (Dev's `?at=`). */
+  /** The address's query, for the rooms that read one (Chat's `?chat=`). */
   search: URLSearchParams | null
+  /** The address's path, for the rooms that read one (Dev's, under `/dev`). */
+  path: string | null
   route: string
   Link: Link
 }
 
-export interface RoomsProps extends Omit<Moving, 'search'> {
+export interface RoomsProps extends Omit<Moving, 'search' | 'path'> {
   /** Absent where no mounted room reads the query, so a static export needs no Suspense for it. */
   search?: URLSearchParams | null
+  /** Absent where no mounted room reads the path. */
+  path?: string | null
   children?: ReactNode
 }
 
@@ -63,6 +67,7 @@ const Context = createContext<Moving>({
     forward: () => window.history.forward(),
   },
   search: null,
+  path: null,
   route: '/',
   Link: Plain,
 })
@@ -104,6 +109,6 @@ export function Look() {
   return null
 }
 
-export function Rooms({ router, search = null, route, Link, children }: RoomsProps) {
-  return <Context.Provider value={{ router, search, route, Link }}>{children}</Context.Provider>
+export function Rooms({ router, search = null, path = null, route, Link, children }: RoomsProps) {
+  return <Context.Provider value={{ router, search, path, route, Link }}>{children}</Context.Provider>
 }
