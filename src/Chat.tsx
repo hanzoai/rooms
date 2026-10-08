@@ -46,8 +46,8 @@ import {
 } from "@hanzo/ai";
 import { ASK, Chat as ChatSurface, Code, Failure, Parts, words, type Said } from "@hanzo/ui/chat";
 import { carriedIn, compose, partsOf, said as told, weigh } from "./lib/attach";
-import { dropped, pct, readable, refOf, retrieve, type FileRef, type WorkFile } from "./lib/files";
-import { channel, drop, hold, landed, spend, take, usePane, useWorkFile, type Held, type Via } from "./pane";
+import { download, dropped, fileOf, pct, readable, refOf, retrieve, type Api, type FileRef, type WorkFile } from "./lib/files";
+import { channel, drop, hold, landed, localOf, spend, take, usePane, useWorkFile, type Held, type Via } from "./pane";
 import { Face, brief as roomBrief, join, roleOf, roomTurn, roster as rosterLine, rosterOf, speakers, speaksOf, voiceOf } from "./cast";
 import { SpeakButton, cleanForSpeech } from "./speech";
 import { Crew, HOUSE, useCrew } from "./crew";
@@ -65,12 +65,13 @@ import { useHydrated } from "./lib/hydrated";
 import { base, served } from "./lib/ai";
 import { onServed, type Served } from "./lib/served";
 import { refused as worded, speech, useDictation, useTalk, useVoice, Voice } from "@hanzo/voice";
-import { ArrowUp, AudioLines, Image as ImageMark, Mic, Paperclip, Square, Star, PanelRight, X } from "lucide-react";
+import { ArrowUp, AudioLines, FileText, Image as ImageMark, Mic, Paperclip, Square, Star, PanelRight, X } from "lucide-react";
 import { ENSO, FREE } from "./lib/ai";
 import { openThread, showSettings, useOpen } from "./open";
 import { Beside, Framed } from "./Shell";
 import { pane } from "./ground";
-import { RightPane, usePinned } from "./RightPane";
+import { RightPane, addressOf, look, usePinned, type Mark } from "./RightPane";
+import { useMedia } from "@hanzo/gui";
 import { Take } from "./copy";
 import { Share } from "./Share";
 import { useStarred } from "./stars";
@@ -433,85 +434,229 @@ const STAGE: Record<NonNullable<WorkFile["stage"]>, string> = {
   embed: "vectors",
 };
 
-/** One chip: the file's glyph, its name, and how far it has got. */
+/** How a file is drawn: a picture, a PDF's tile, or a chip. Read off its type, else its name, since a store may answer with neither. */
+function kindOf(name: string, type: string): "image" | "pdf" | "file" {
+  if (type.startsWith("image/") || /\.(png|jpe?g|gif|webp|avif|svg)$/i.test(name)) return "image";
+  if (type === "application/pdf" || /\.pdf$/i.test(name)) return "pdf";
+  return "file";
+}
+
+// SIGNED ADDRESSES FOR PICTURES, by workspace file: a list of turns mounts and
+// remounts its chips, and asking the store each time would be a request per
+// picture per redraw. Kept for less than a signature lives (the store's are
+// five minutes), so a chip mounted later reads a fresh one; a picture already
+// drawn keeps its pixels whatever becomes of its address.
+const signed = new Map<string, { at: number; got: Promise<string> }>();
+const SIGNED_FOR = 4 * 60_000;
+
+function signedOf(api: Api, id: string, file?: WorkFile): Promise<string> {
+  const kept = signed.get(id);
+  if (kept && Date.now() - kept.at < SIGNED_FOR) return kept.got;
+  const got = (file?.bucket && file.key ? Promise.resolve(file) : fileOf(api, id)).then((f) => download(api, f.bucket, f.key));
+  signed.set(id, { at: Date.now(), got });
+  got.catch(() => signed.delete(id));
+  return got;
+}
+
+/**
+ * Where a picture's thumbnail reads from: the bytes on this machine where this
+ * document holds them (the held file's object URL, which outlives its send),
+ * else a signed address for the workspace's copy — a file taken from Drive, or
+ * a turn read back after a reload. '' until there is one.
+ */
+function usePicture(on: boolean, href: string, id: string | undefined, file: WorkFile | undefined): string {
+  const api = useAi();
+  const near = on ? href || (id ? localOf(id) : "") : "";
+  const [far, setFar] = useState("");
+  const bucket = file?.bucket;
+  useEffect(() => {
+    if (!on || near || !id) return;
+    let live = true;
+    signedOf(api, id, file).then(
+      (url) => live && setFar(url),
+      () => {},
+    );
+    return () => {
+      live = false;
+    };
+    // The file's record moves with every stage of its ingest; its address does not.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [on, near, id, bucket, api]);
+  return near || far;
+}
+
+/** Edge of a picture's or a PDF's thumbnail, in px. */
+const THUMB = 48;
+
+/**
+ * One file put into a message.
+ *
+ * A PICTURE SHOWS ITSELF and a PDF shows a tile, each with its name and size
+ * beside it; any other kind is a chip of its name. Nothing is filled behind
+ * them: a hairline on whatever they sit on, so a file reads alike over the
+ * composer and inside a turn's bubble, in a light room and a dark one. A second
+ * fill on the bubble's was the darker grey that read as a stain. The word for
+ * how far a file has got shows only while it is getting there — a picture of
+ * the file already says it is attached — and `data-state` keeps the index's own
+ * word for whoever reads it.
+ *
+ * Pressing one opens it beside the conversation (`onOpen`).
+ */
 function Chip({
   name,
   type,
+  size,
   state,
   sent,
   file,
+  picture,
+  onOpen,
   onRemove,
 }: {
   name: string;
   type: string;
+  size: number;
   state: Held["state"];
   sent: number;
   file?: WorkFile;
+  /** The picture's address, or '' — none yet, or not a picture. */
+  picture: string;
+  onOpen: () => void;
   onRemove?: () => void;
 }) {
+  const kind = kindOf(name, type);
   const bad = state === "failed";
   const why = state === "failed" || state === "stored" ? file?.error : file?.note;
+  // A picture the browser cannot draw (HEIC, a lapsed signature) falls back to its glyph.
+  const [broken, setBroken] = useState("");
+  const word = state === "ready" ? (file?.clipped ? "in part" : "") : progress(state, sent, file);
+  const meta = [kind === "pdf" ? "PDF" : "", size > 0 ? weigh(size) : "", word].filter(Boolean).join(" \u00b7 ");
+  const remove = onRemove ? (
+    <Box render="button" aria-label={`Remove ${name}`} onClick={onRemove} p="$1" rounded="$10" shrink={0} hoverStyle={{ bg: "$hover" }}>
+      <X size={12} aria-hidden />
+    </Box>
+  ) : null;
+  const marks = {
+    role: "listitem",
+    "data-slot": "file-chip",
+    "data-state": state,
+    "data-kind": kind,
+    "data-stage": file?.stage ?? "",
+    ...(why ? { title: why } : null),
+  } as object;
+
+  if (kind === "file")
+    return (
+      <XStack {...marks} self="center" items="center" gap="$1" pr={onRemove ? "$1" : "$2.5"} rounded="$10" borderWidth={1} borderColor="$borderColor" maxW={320}>
+        <XStack render="button" aria-label={`Open ${name}`} onClick={onOpen} items="center" gap="$1.5" pl="$2.5" py="$1" minW={0} cursor="pointer">
+          <Paperclip size={12} aria-hidden color="var(--muted-foreground)" />
+          <Text fontSize="$2" color="$ink" numberOfLines={1}>
+            {name}
+          </Text>
+          {meta ? (
+            <Text fontSize="$1" color={bad ? BAD : "$soft"} numberOfLines={1} shrink={0}>
+              {meta}
+            </Text>
+          ) : null}
+        </XStack>
+        {remove}
+      </XStack>
+    );
+
+  const drawn = kind === "image" && picture && broken !== picture;
+  const Glyph = kind === "pdf" ? FileText : ImageMark;
   return (
-    <XStack
-      role="listitem"
-      items="center"
-      gap="$1.5"
-      pl="$2.5"
-      pr={onRemove ? "$1" : "$2.5"}
-      py="$1"
-      rounded="$10"
-      borderWidth={1}
-      borderColor="$borderColor"
-      bg="$hover"
-      maxW={320}
-      data-slot="file-chip"
-      data-state={state}
-      data-stage={file?.stage ?? ""}
-      {...(why ? ({ title: why } as object) : null)}
-    >
-      {type.startsWith("image/") ? (
-        <ImageMark size={12} aria-hidden color="var(--muted-foreground)" />
-      ) : (
-        <Paperclip size={12} aria-hidden color="var(--muted-foreground)" />
-      )}
-      <Text fontSize="$2" color="$ink" numberOfLines={1}>
-        {name}
-      </Text>
-      <Text fontSize="$1" color={bad ? BAD : "$soft"} numberOfLines={1} shrink={0}>
-        {progress(state, sent, file)}
-      </Text>
-      {onRemove ? (
-        <Box render="button" aria-label={`Remove ${name}`} onClick={onRemove} p="$1" rounded="$10" hoverStyle={{ bg: "$raised" }}>
-          <X size={12} aria-hidden />
-        </Box>
-      ) : null}
+    <XStack {...marks} items="center" gap="$1" p="$1" pr={onRemove ? "$1" : "$2.5"} rounded="$4" borderWidth={1} borderColor="$borderColor" maxW={280}>
+      <XStack render="button" aria-label={`Open ${name}`} onClick={onOpen} items="center" gap="$2" minW={0} cursor="pointer">
+        <YStack
+          data-slot="file-thumb"
+          width={THUMB}
+          height={THUMB}
+          shrink={0}
+          rounded="$3"
+          overflow="hidden"
+          items="center"
+          justify="center"
+          gap="$0.5"
+          borderWidth={drawn ? 0 : 1}
+          borderColor="$borderColor"
+        >
+          {drawn ? (
+            <View
+              render={<img src={picture} alt="" loading="lazy" decoding="async" onError={() => setBroken(picture)} />}
+              width="100%"
+              height="100%"
+              objectFit="cover"
+              display="block"
+            />
+          ) : (
+            <>
+              <Glyph size={18} aria-hidden color="var(--muted-foreground)" />
+              {kind === "pdf" ? (
+                <Text fontSize={9} fontWeight="600" letterSpacing={0.5} color="$soft">
+                  PDF
+                </Text>
+              ) : null}
+            </>
+          )}
+        </YStack>
+        {/* `text` because a button centres what it holds; a name and its size read from the left. */}
+        <YStack minW={0} gap="$0.5">
+          <Text fontSize="$2" color="$ink" numberOfLines={1} text="left">
+            {name}
+          </Text>
+          {meta ? (
+            <Text fontSize="$1" color={bad ? BAD : "$soft"} numberOfLines={1} text="left">
+              {meta}
+            </Text>
+          ) : null}
+        </YStack>
+      </XStack>
+      {remove}
     </XStack>
   );
 }
 
 /** A file held for the next message: uploading, then indexing, then ready. */
-function HeldChip({ one, onRemove }: { one: Held; onRemove: () => void }) {
+function HeldChip({ one, onOpen, onRemove }: { one: Held; onOpen: (m: Mark) => void; onRemove: () => void }) {
   const live = useWorkFile(one.file?.id);
   const file = live ?? one.file;
   const state = one.state === "uploading" ? one.state : (file?.status ?? one.state);
-  return <Chip name={one.name} type={one.type} state={state} sent={one.sent} file={file ?? (one.error ? ({ error: one.error } as WorkFile) : undefined)} onRemove={onRemove} />;
+  const picture = usePicture(kindOf(one.name, one.type) === "image", one.href, file?.id, file);
+  // The mark the column's Sources row opens for the same file, so both open it alike.
+  const mark: Mark = { id: one.id, name: one.name, kind: kindOf(one.name, one.type) === "image" ? "image" : "file", href: one.href || undefined, file: file?.id, mime: one.type };
+  return (
+    <Chip
+      name={one.name}
+      type={one.type}
+      size={one.size}
+      state={state}
+      sent={one.sent}
+      file={file ?? (one.error ? ({ error: one.error } as WorkFile) : undefined)}
+      picture={picture}
+      onOpen={() => onOpen(mark)}
+      onRemove={onRemove}
+    />
+  );
 }
 
 /** A file a sent turn carried, as the index says of it now. */
-function TurnChip({ f }: { f: FileRef }) {
+function TurnChip({ f, onOpen }: { f: FileRef; onOpen: (m: Mark) => void }) {
   const live = useWorkFile(f.id);
-  return <Chip name={f.name} type={f.type} state={live?.status ?? "ready"} sent={1} file={live} />;
+  const picture = usePicture(kindOf(f.name, f.type) === "image", "", f.id, live);
+  const mark: Mark = { id: f.id, name: f.name, kind: kindOf(f.name, f.type) === "image" ? "image" : "file", file: f.id, mime: f.type };
+  return <Chip name={f.name} type={f.type} size={f.size} state={live?.status ?? "ready"} sent={1} file={live} picture={picture} onOpen={() => onOpen(mark)} />;
 }
 
 /** A question that carried files: its words, the files put into it, and those read again. */
-function Carried({ text, attached, reused }: { text: string; attached: FileRef[]; reused: FileRef[] }) {
+function Carried({ text, attached, reused, onOpen }: { text: string; attached: FileRef[]; reused: FileRef[]; onOpen: (m: Mark) => void }) {
   return (
-    <YStack gap="$1.5" data-slot="turn-files">
+    <YStack gap="$2" data-slot="turn-files">
       {text ? <Prose text={text} /> : null}
       {attached.length ? (
         <XStack gap="$1.5" flexWrap="wrap" role="list" aria-label="Files in this message">
           {attached.map((f) => (
-            <TurnChip key={f.id} f={f} />
+            <TurnChip key={f.id} f={f} onOpen={onOpen} />
           ))}
         </XStack>
       ) : null}
@@ -583,6 +728,30 @@ function Thread({
   // switch for it. Kept per conversation by `pane.ts`, so the header's control
   // reflects THIS room rather than the last one that was open.
   const [pinned, flipPin] = usePinned();
+  // The frame draws the column only from `$lg` (Shell.tsx `Paned`).
+  const wide = useMedia().lg;
+  /**
+   * OPENS A FILE A MESSAGE CARRIES, by the road the column's Sources row takes
+   * (`look`): a tab in the browser beside the conversation, the column opened
+   * first when it is shut. A phone has no column — the frame spends the width
+   * on the room — so there the file opens in a tab of the browser's own, minted
+   * before the signed address is asked for, since a window opened after an
+   * await is a popup the browser blocks.
+   */
+  const openFile = useCallback(
+    (m: Mark) => {
+      if (wide) {
+        if (aside === null) showAside("tasks");
+        void look(at, m, ai);
+        return;
+      }
+      const tab = window.open("", "_blank");
+      if (!tab) return;
+      tab.opener = null;
+      void addressOf(m, ai).then((href) => (href ? tab.location.replace(href) : tab.close()));
+    },
+    [wide, aside, showAside, at, ai],
+  );
   /**
    * WHO YOU ARE TALKING TO, when it is somebody rather than the plain model.
    *
@@ -1540,7 +1709,7 @@ function Thread({
           // the passages it handed the model are the model's to read, not ours.
           if (turn.role === "user" && said) {
             const read = told(said);
-            if (read.carried) return <Carried text={read.text} attached={read.carried.attached} reused={read.carried.reused} />;
+            if (read.carried) return <Carried text={read.text} attached={read.carried.attached} reused={read.carried.reused} onOpen={openFile} />;
           }
           // WHILE THE ANSWER HAS NO WORDS YET: who is answering (the agents the
           // question addresses, or the whole room when it names nobody), and the
@@ -1841,7 +2010,7 @@ function Thread({
                 {files.length ? (
                   <XStack gap="$1.5" flexWrap="wrap" role="list" aria-label="Attached files" data-slot="composer-attached">
                     {files.map((one) => (
-                      <HeldChip key={one.id} one={one} onRemove={() => drop(at, one.id)} />
+                      <HeldChip key={one.id} one={one} onOpen={openFile} onRemove={() => drop(at, one.id)} />
                     ))}
                   </XStack>
                 ) : null}

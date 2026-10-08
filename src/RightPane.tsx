@@ -88,7 +88,7 @@ const FEW = 5
  * never a file — a fenced block exists only in the transcript until somebody
  * asks to look at it, at which point `body` becomes a blob and gets an address.
  */
-interface Mark {
+export interface Mark {
   id: string
   name: string
   kind: 'image' | 'code' | 'file'
@@ -338,19 +338,26 @@ function Marks({
  * `index.html` something you can actually see rather than something you can
  * only read the source of.
  */
-async function look(at: string, m: Mark, api: Api): Promise<void> {
+export async function look(at: string, m: Mark, api: Api): Promise<void> {
+  const href = await addressOf(m, api)
+  if (href) openTab(at, href, m.name)
+}
+
+/**
+ * Where a mark can be opened: its own address, a signed one minted for its
+ * workspace file, or one minted from its text. Null when there is none — a file
+ * forgotten or a store unreachable opens nothing, and the row stays.
+ */
+export async function addressOf(m: Mark, api: Api): Promise<string | null> {
   if (!m.href && m.file) {
     try {
       const f = await fileOf(api, m.file)
-      openTab(at, await download(api, f.bucket, f.key), m.name)
+      return await download(api, f.bucket, f.key)
     } catch {
-      // A file forgotten or a store unreachable opens nothing; the row stays.
+      return null
     }
-    return
   }
-  const href = m.href ?? (m.body === undefined ? null : URL.createObjectURL(new Blob([m.body], { type: m.mime })))
-  if (!href) return
-  openTab(at, href, m.name)
+  return m.href ?? (m.body === undefined ? null : URL.createObjectURL(new Blob([m.body], { type: m.mime })))
 }
 
 /**

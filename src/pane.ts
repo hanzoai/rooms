@@ -305,6 +305,15 @@ export function useWorkFile(id: string | undefined): WorkFile | undefined {
   )
 }
 
+// THE BYTES ON THIS MACHINE, by the workspace file they became. `spend` leaves a
+// held file's object URL standing, so a turn that carried a picture draws it
+// from here with no request, for as long as this document lives. A reload ends
+// it, and the turn reads the workspace's copy instead.
+const local = new Map<string, string>()
+
+/** The object URL over workspace file `id`'s bytes on this machine, or '' where this document never held them. */
+export const localOf = (id: string): string => local.get(id) ?? ''
+
 // Each held file's upload, by held id: what stops it, and what it settles to.
 const carrying = new Map<string, { stop: AbortController; done: Promise<WorkFile | null> }>()
 
@@ -370,6 +379,7 @@ export async function hold(key: string, list: readonly File[], via: Via): Promis
       const objectKey = chatKey(file)
       await upload(via.api, bucket, objectKey, file, (sent) => patch(key, h.id, { sent }), stop.signal)
       const got = await register(via.api, bucket, objectKey)
+      local.set(got.id, h.href)
       patch(key, h.id, fromFile(got))
       watch(via.api, got, key, h.id)
       land(got)
@@ -437,7 +447,10 @@ export function drop(key: string, id: string): void {
     if (!going) return was
     carrying.get(id)?.stop.abort()
     carrying.delete(id)
-    if (going.href) URL.revokeObjectURL(going.href)
+    if (going.href) {
+      if (going.file) local.delete(going.file.id)
+      URL.revokeObjectURL(going.href)
+    }
     return { ...was, held: was.held.filter((h) => h.id !== id) }
   })
 }
