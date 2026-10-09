@@ -11,7 +11,8 @@ import { Spinner, Text, YStack } from '@hanzo/gui'
  * a layout that already supplies a header and a footer — so a page carrying one
  * line of text scrolled, and the line sat below the middle of it.
  *
- * It takes the space a short message needs and leaves the rest to the layout.
+ * It fills the viewport below the bar (`--header`, which the bar publishes) and
+ * centres one spinner and one line in it, the same on every route that waits.
  */
 export function Waiting({ title, lede }: { title: string; lede?: string }) {
   return (
@@ -19,11 +20,11 @@ export function Waiting({ title, lede }: { title: string; lede?: string }) {
       items="center"
       justify="center"
       gap="$5"
-      minH={360}
+      minH="calc(100dvh - var(--header, 64px))"
       px="$4"
-      py="$10"
+      py="$6"
     >
-      <Spinner size="small" color="$ink" width={28} height={28} shrink={0} />
+      <Spinner size="large" color="$ink" width={44} height={44} shrink={0} />
       <Text
         render="h1"
         fontSize="$7"
