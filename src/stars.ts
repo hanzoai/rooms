@@ -82,3 +82,31 @@ export function useStarred(kind = 'rooms'): [Set<string>, (id: string) => void] 
 
   return [starred, toggle]
 }
+
+/**
+ * The conversations starred in this browser before a pin was the server's
+ * (@hanzo/rooms 0.1.36 stopped reading the set), made pins once. Each is asked
+ * for as a pin through `pin`; once the store has taken any of them the stars
+ * are forgotten, and a store that takes none — one without the route yet —
+ * leaves them for a later visit. Answers whether they were carried.
+ */
+export async function carry(pin: (id: string) => Promise<unknown>): Promise<boolean> {
+  const key = keyOf('threads')
+  let ids: unknown
+  try {
+    ids = JSON.parse(localStorage.getItem(key) || '[]')
+  } catch {
+    return false
+  }
+  if (!Array.isArray(ids)) return false
+  const named = ids.filter((id): id is string => typeof id === 'string' && id !== '')
+  if (!named.length) return false
+  const said = await Promise.allSettled(named.map((id) => pin(id)))
+  if (!said.some((one) => one.status === 'fulfilled')) return false
+  try {
+    localStorage.removeItem(key)
+  } catch {
+    // A browser that refuses storage asks again next visit; a pin asked twice is still one pin.
+  }
+  return true
+}

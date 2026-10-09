@@ -625,6 +625,9 @@ function Chats({
                 <SidebarItem
                   key={t.id}
                   active={t.id === thread}
+                  // A stored conversation's ⋯ stands at the row's end: its title and dates stop short of it,
+                  // a thumb's width short on a touch screen.
+                  {...(t.thread ? { pr: "$8", $touchable: { pr: 52 } } : null)}
                   onPress={() => {
                     open(t.id);
                     onPick?.();

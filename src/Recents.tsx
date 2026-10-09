@@ -104,6 +104,7 @@ function Chats({
       error={store.error}
       onOpen={onOpen}
       threads={byId}
+      held={thread}
       onNew={onNew}
     />
   )
@@ -149,6 +150,7 @@ function List({
   error,
   onOpen,
   threads,
+  held = null,
   onNew,
 }: {
   mode: Mode
@@ -162,6 +164,8 @@ function List({
   onOpen: (r: Recent) => void
   /** Chat's conversations by id: a row of one carries its menu. */
   threads?: Map<string, Thread>
+  /** The conversation the pane holds, listed or not: a deleted one leaves the list before the store answers. */
+  held?: string | null
   /** Moves the pane to a new conversation: where it goes when the one it holds is deleted. */
   onNew?: () => void
 }) {
@@ -172,13 +176,16 @@ function List({
   const running = mode === 'dev' ? rows.filter((r) => r.status === 'running').length : 0
   const row = (r: Recent) => {
     const when = ago(r.at, now)
+    const t = threads?.get(r.id)
     const item = (
         <SidebarItem
           data-kind={r.kind}
           active={open(r)}
           rounded="$4"
           minH={32}
-          pr={when ? '$8' : '$2'}
+          pr={when || t ? '$8' : '$2'}
+          // A conversation's ⋯ is a thumb wide on a touch screen and always there: the title stops short of it.
+          {...(t ? { $touchable: { pr: 52 } } : null)}
           onKeyDown={(e: { key?: string; preventDefault?: () => void }) => {
             if (e.key !== 'Enter' && e.key !== ' ') return
             e.preventDefault?.()
@@ -206,7 +213,6 @@ function List({
         </time>
       </SizableText>
     ) : null
-    const t = threads?.get(r.id)
     if (t)
       return (
         <ThreadRow key={r.id} t={t} active={open(r)} aside={age}>
@@ -295,7 +301,7 @@ function List({
         {error ? <Note>{error.message}</Note> : null}
         {threads ? (
           // Held while the list empties, so a dialog its last row opened closes in place.
-          <ConversationMenu threads={threads} active={rows.find(open)?.id ?? null} onGone={onNew}>
+          <ConversationMenu threads={threads} active={held} onGone={onNew}>
             <YStack>{body}</YStack>
           </ConversationMenu>
         ) : (

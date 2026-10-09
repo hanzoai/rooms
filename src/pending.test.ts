@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import type { Thread } from '@hanzo/ai'
-import { attempt, enlist, snapshot, sweep, tick, view, type Reader } from './pending'
+import { attempt, bind, enlist, snapshot, sweep, tick, view, type Reader } from './pending'
 
 // Each test names its own conversations, so the changes one leaves settled
 // cannot reach another's lists.
@@ -12,7 +12,7 @@ const ids = () => {
 
 const thread = (id: string, at: string, extra: Partial<Thread> = {}): Thread => ({ id, title: id, updatedAt: at, ...extra })
 
-/** A store answer the test settles by hand. */
+/** A store answer the test settles by hand, and whether it was asked for yet. */
 function answer<T>() {
   let ok!: (v: T) => void
   let no!: (e: Error) => void
@@ -20,8 +20,12 @@ function answer<T>() {
     ok = resolve
     no = reject
   })
-  return { promise, ok, no }
+  const call = { asked: false, promise, ok, no, send: () => ((call.asked = true), promise) }
+  return call
 }
+
+/** Lets every answer already given be heard. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 /** A list on the page, read now. */
 function reader(): Reader & { asked: number } {
@@ -36,7 +40,7 @@ describe('a change shows at once', () => {
     const r = reader()
     const leave = enlist(r)
     const store = answer<Thread>()
-    const done = attempt(b, { ...list[1], pinned: true, title: 'Borealis' }, () => store.promise)
+    const done = attempt(list[1], { pinned: true, title: 'Borealis' }, store.send)
     expect(view(list, r.at, false).map((t) => [t.id, t.pinned ?? false, t.title])).toEqual([
       [a, false, a],
       [b, true, 'Borealis'],
@@ -52,8 +56,8 @@ describe('a change shows at once', () => {
     const shelf = [thread(c, '2026-10-01T09:00:00Z', { archived: true })]
     const gone = answer<void>()
     const away = answer<Thread>()
-    const deleting = attempt(a, null, () => gone.promise)
-    const archiving = attempt(b, { ...active[1], archived: true }, () => away.promise)
+    const deleting = attempt(active[0], null, gone.send)
+    const archiving = attempt(active[1], { archived: true }, away.send)
     expect(view(active, 0, false)).toEqual([])
     // Joins the shelf in the store's order: the most recently spoken in first.
     expect(view(shelf, 0, true).map((t) => t.id)).toEqual([b, c])
@@ -66,7 +70,7 @@ describe('a change shows at once', () => {
     const { a } = ids()
     const list = [thread(a, '2026-10-08T10:00:00Z', { pinned: false })]
     const store = answer<Thread>()
-    const done = attempt(a, { ...list[0], pinned: true }, () => store.promise)
+    const done = attempt(list[0], { pinned: true }, store.send)
     const shown = snapshot()
     expect(view(list, 0, false)[0].pinned).toBe(true)
     store.no(new Error('That conversation is not yours.'))
@@ -79,11 +83,82 @@ describe('a change shows at once', () => {
     const { a, b } = ids()
     const list = [thread(a, '2026-10-08T10:00:00Z'), thread(b, '2026-10-08T09:00:00Z')]
     const store = answer<void>()
-    const done = attempt(a, null, () => store.promise)
+    const done = attempt(list[0], null, store.send)
     expect(view(list, 0, false).map((t) => t.id)).toEqual([b])
     store.no(new Error('offline'))
     await expect(done).rejects.toThrow('offline')
     expect(view(list, 0, false).map((t) => t.id)).toEqual([a, b])
+  })
+})
+
+describe("one conversation's changes go to the store in order", () => {
+  test('a refused rename leaves a pin still in flight standing', async () => {
+    const { a } = ids()
+    const list = [thread(a, '2026-10-08T10:00:00Z')]
+    const r = reader()
+    const leave = enlist(r)
+    const pin = answer<Thread>()
+    const rename = answer<Thread>()
+    const pinning = attempt(list[0], { pinned: true }, pin.send)
+    const renaming = attempt({ ...list[0], pinned: true }, { title: 'Renamed' }, rename.send)
+    expect(view(list, r.at, false)[0]).toMatchObject({ pinned: true, title: 'Renamed' })
+    // The rename waits for the pin's answer before it is asked.
+    await settle()
+    expect(rename.asked).toBe(false)
+    pin.ok({ ...list[0], pinned: true })
+    await pinning
+    await settle()
+    expect(rename.asked).toBe(true)
+    rename.no(new Error('Titles are one line.'))
+    await expect(renaming).rejects.toThrow('Titles are one line.')
+    expect(view(list, r.at, false)[0]).toMatchObject({ pinned: true, title: a })
+    leave()
+  })
+
+  test('a refused pin takes back only itself, and the change after it still goes', async () => {
+    const { a } = ids()
+    const list = [thread(a, '2026-10-08T10:00:00Z')]
+    const r = reader()
+    const leave = enlist(r)
+    const pin = answer<Thread>()
+    const rename = answer<Thread>()
+    const pinning = attempt(list[0], { pinned: true }, pin.send)
+    const renaming = attempt({ ...list[0], pinned: true }, { title: 'Renamed' }, rename.send)
+    pin.no(new Error('refused'))
+    await expect(pinning).rejects.toThrow('refused')
+    expect(view(list, r.at, false)[0]).toMatchObject({ title: 'Renamed' })
+    expect(view(list, r.at, false)[0].pinned).toBeFalsy()
+    await settle()
+    expect(rename.asked).toBe(true)
+    rename.ok({ ...list[0], title: 'Renamed' })
+    await renaming
+    expect(view(list, r.at, false)[0]).toMatchObject({ title: 'Renamed' })
+    leave()
+  })
+
+  test('two toggles are asked one after the other, so the last one asked is the one that stands', async () => {
+    const { a } = ids()
+    const list = [thread(a, '2026-10-08T10:00:00Z', { pinned: false })]
+    const r = reader()
+    const leave = enlist(r)
+    const on = answer<Thread>()
+    const off = answer<Thread>()
+    const pinning = attempt(list[0], { pinned: true }, on.send)
+    const unpinning = attempt({ ...list[0], pinned: true }, { pinned: false }, off.send)
+    expect(view(list, r.at, false)[0].pinned).toBe(false)
+    await settle()
+    // The second is not asked until the first is answered: they cannot cross.
+    expect(on.asked).toBe(true)
+    expect(off.asked).toBe(false)
+    on.ok({ ...list[0], pinned: true })
+    await pinning
+    expect(view(list, r.at, false)[0].pinned).toBe(false)
+    await settle()
+    expect(off.asked).toBe(true)
+    off.ok({ ...list[0], pinned: false })
+    await unpinning
+    expect(view(list, r.at, false)[0].pinned).toBe(false)
+    leave()
   })
 })
 
@@ -94,7 +169,7 @@ describe('a settled change', () => {
     const early = reader()
     const leave = enlist(early)
     const store = answer<Thread>()
-    const done = attempt(a, { ...before[0], title: 'mine' }, () => store.promise)
+    const done = attempt(before[0], { title: 'mine' }, store.send)
     // The store answers with its own spelling of the change, which is the one shown.
     store.ok({ ...before[0], title: 'Mine' })
     await done
@@ -114,30 +189,47 @@ describe('a settled change', () => {
     leave()
   })
 
-  test('a later change to the same conversation stands when the earlier one is refused', async () => {
+  test('folds into the thread a later change is laid over, so an archived row is not drawn back on the active shelf', async () => {
     const { a } = ids()
-    const list = [thread(a, '2026-10-08T10:00:00Z')]
-    const first = answer<Thread>()
-    const second = answer<Thread>()
+    const row = thread(a, '2026-10-08T10:00:00Z')
     const r = reader()
     const leave = enlist(r)
-    const pinning = attempt(a, { ...list[0], pinned: true }, () => first.promise)
-    const renaming = attempt(a, { ...list[0], pinned: true, title: 'Renamed' }, () => second.promise)
-    first.no(new Error('refused'))
-    await expect(pinning).rejects.toThrow('refused')
-    expect(view(list, r.at, false)[0]).toMatchObject({ pinned: true, title: 'Renamed' })
-    // The store kept only the rename, and says so: that is what shows.
-    second.ok({ ...list[0], title: 'Renamed', pinned: false })
+    await attempt(row, { archived: true }, () => Promise.resolve({ ...row, archived: true }))
+    // The active list reads after the archive: the row is not in it, and the archived shelf has it.
+    r.at = tick()
+    sweep()
+    const rename = answer<Thread>()
+    const renaming = attempt({ ...row, archived: true }, { title: 'Renamed' }, rename.send)
+    expect(view([], r.at, false)).toEqual([])
+    expect(view([{ ...row, archived: true }], r.at, true)[0]).toMatchObject({ title: 'Renamed', archived: true })
+    rename.ok({ ...row, archived: true, title: 'Renamed' })
     await renaming
-    expect(view(list, r.at, false)[0]).toMatchObject({ title: 'Renamed' })
-    expect(view(list, r.at, false)[0].pinned).toBeFalsy()
     leave()
   })
 
   test('with no list on the page there is nothing to hold it for', async () => {
     const { a } = ids()
     const list = [thread(a, '2026-10-08T10:00:00Z')]
-    await attempt(a, { ...list[0], pinned: true }, () => Promise.resolve({ ...list[0], pinned: true }))
+    await attempt(list[0], { pinned: true }, () => Promise.resolve({ ...list[0], pinned: true }))
+    expect(view(list, 0, false)).toEqual(list)
+  })
+})
+
+describe('another client', () => {
+  test('draws nothing asked under the last one', async () => {
+    const { a } = ids()
+    const list = [thread(a, '2026-10-08T10:00:00Z')]
+    const one = {}
+    bind(one)
+    const store = answer<Thread>()
+    const done = attempt(list[0], { pinned: true }, store.send)
+    expect(view(list, 0, false)[0].pinned).toBe(true)
+    bind(one)
+    expect(view(list, 0, false)[0].pinned).toBe(true)
+    bind({})
+    expect(view(list, 0, false)).toEqual(list)
+    store.ok({ ...list[0], pinned: true })
+    await done
     expect(view(list, 0, false)).toEqual(list)
   })
 })

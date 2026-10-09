@@ -101,12 +101,22 @@ Unarchive, Delete. The address of a conversation is `site(talk(id))`; a
 ⌘/Ctrl-click or a middle-click on a row opens it in a new tab.
 
 - The keys act on the row whose menu is open, else on the conversation the
-  pane holds, never while the reader types (`chord.ts`). One capture-phase
+  pane holds — never while the reader types, inside a dialog or one of the
+  menu's dialogs is open, and once a press, not per key repeat (`chord.ts`).
+  They match the letter on the key (`e.key`), and the key's place (`e.code`)
+  only where Option or AltGr made it another character. One capture-phase
   listener on the page serves every list.
-- A change shows at once and is taken back with a toast on a refusal
-  (`pending.ts`): every `useThreadList` draws the changes in flight over what
-  it read. A settled change is kept until every list has read after it, by one
-  clock that stamps reads and answers, so no list flashes its older read.
+- A change shows at once and is taken back with a toast on a refusal or after
+  15 s without an answer (`pending.ts`): every `useThreadList` draws the
+  changes in flight over what it read. One conversation's changes go to the
+  store one after another, and a refusal takes back that change alone. A
+  settled change is kept until every list has read after it, by one clock that
+  stamps reads and answers, so no list flashes its older read. A new client
+  (another reader or organization) drops them (`bind`).
+- Stars from before pins were the server's (`hanzo.starred-threads`) are asked
+  for as pins once a page, after the first list read answers, and forgotten
+  once the store takes any (`stars.ts` `carry`); a store without the route
+  keeps them for a later visit.
 - Never `@hanzo/ui/product/menu`'s ContextMenu here: it portals its panel under
   gui's `pointer-events: none` host and takes no click.
 

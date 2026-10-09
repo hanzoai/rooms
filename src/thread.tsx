@@ -35,7 +35,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react'
-import type { Thread, ThreadChange } from '@hanzo/ai'
+import type { AiClient, Thread, ThreadChange } from '@hanzo/ai'
 import { useAi } from '@hanzo/ai/react'
 import { Archive, ArchiveRestore, ExternalLink, Link2, MoreHorizontal, Pencil, Pin, PinOff, Share2, Trash2 } from 'lucide-react'
 import {
@@ -65,9 +65,11 @@ import {
 import { empty } from './open'
 import { say } from './lib/org'
 import { talk } from './lib/host'
+import { BAD } from './lib/mix'
 import { site } from './where'
-import { attempt, enlist, snapshot, subscribe, sweep, tick, view, type Reader } from './pending'
-import { chord, said, type Act } from './chord'
+import { attempt, bind, enlist, reread, snapshot, subscribe, sweep, tick, view, type Reader } from './pending'
+import { chord, named, said, type Act } from './chord'
+import { carry } from './stars'
 import { ShareDialog } from './Share'
 
 export interface ThreadList {
@@ -94,6 +96,7 @@ export function useThreadList(archived = false, seek: string | null = null): Thr
   const reload = useCallback(() => ask((n) => n + 1), [])
   const me = useRef<Reader>({ at: 0, reload })
   useEffect(() => enlist(me.current), [])
+  useEffect(() => bind(ai), [ai])
   useEffect(() => {
     const control = new AbortController()
     const at = tick()
@@ -106,6 +109,8 @@ export function useThreadList(archived = false, seek: string | null = null): Thr
         setError(null)
         setLoading(false)
         sweep()
+        // A read that answers is a client the store takes: the browser's old stars can become pins.
+        stars(ai)
       },
       (e: unknown) => {
         if (control.signal.aborted) return
@@ -126,25 +131,44 @@ export function useThreadList(archived = false, seek: string | null = null): Thr
   return { threads, loading, error, reload }
 }
 
+/** How long a change waits for the store before it is taken back. */
+const WAIT = 15_000
+
+/** A refusal in the store's words, or that the store did not answer at all. */
+const refused = (e: unknown): string =>
+  e instanceof DOMException && e.name === 'TimeoutError' ? 'The conversation store did not answer. Try again.' : say(e)
+
+let carried = false
+
+/** The browser's stars from before pins were the server's, made pins once a page (stars.ts `carry`). */
+function stars(ai: AiClient): void {
+  if (carried) return
+  carried = true
+  void carry((id) => ai.threads.update(id, { pinned: true }, { signal: AbortSignal.timeout(WAIT) })).then((done) => {
+    if (done) reread()
+  })
+}
+
 /** What a conversation can be asked to do. Each shows at once; a refusal takes it back and says so in a toast. */
 export function useThreadActions() {
   const ai = useAi()
   return useMemo(() => {
-    const run = async (t: Thread, want: Thread | null, send: () => Promise<Thread | void>): Promise<boolean> => {
+    const run = async (t: Thread, change: ThreadChange | null, send: (signal: AbortSignal) => Promise<Thread | void>): Promise<boolean> => {
       try {
-        await attempt(t.id, want, send)
+        // The clock starts when the change is asked, after the ones before it are answered.
+        await attempt(t, change, () => send(AbortSignal.timeout(WAIT)))
         return true
       } catch (e) {
-        toast.error(say(e))
+        toast.error(refused(e))
         return false
       }
     }
-    const change = (t: Thread, to: ThreadChange) => run(t, { ...t, ...to }, () => ai.threads.update(t.id, to))
+    const change = (t: Thread, to: ThreadChange) => run(t, to, (signal) => ai.threads.update(t.id, to, { signal }))
     return {
       pin: (t: Thread) => change(t, { pinned: !t.pinned }),
       archive: (t: Thread) => change(t, { archived: !t.archived }),
       rename: (t: Thread, title: string) => change(t, { title }),
-      remove: (t: Thread) => run(t, null, () => ai.threads.remove(t.id)),
+      remove: (t: Thread) => run(t, null, (signal) => ai.threads.remove(t.id, { signal })),
     }
   }, [ai])
 }
@@ -169,8 +193,8 @@ async function copy(id: string): Promise<void> {
   }
 }
 
-/** The one colour in the menu: Delete's, design's destructive. */
-const DANGER = 'var(--destructive)'
+/** The one colour in the menu: Delete's — design's destructive mixed toward the theme's ink, 4.5:1 on either theme's panel. */
+const DANGER = BAD
 
 const mac = (): boolean => typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent)
 
@@ -186,13 +210,17 @@ interface Menus {
 
 const Rows = createContext<Menus | null>(null)
 
-/** One entry of the menu: an act, or the line before Delete. */
-type Entry = { key: string; label: string; icon: ReactNode; shortcut?: string; destructive?: boolean; run: () => void } | { key: string; line: true }
+/** One entry of the menu: an act — its keys printed, and named for assistive technology — or the line before Delete. */
+type Entry =
+  | { key: string; label: string; icon: ReactNode; shortcut?: string; keys?: string; destructive?: boolean; run: () => void }
+  | { key: string; line: true }
 
 /** The keys of every list's menu on the page, heard once (`chord`). */
 interface Keys {
   /** Whether this list's menu is open. */
   open: boolean
+  /** Whether one of this list's dialogs is: the keys are the dialog's then. */
+  held: boolean
   /** The conversation the keys act on here: the one whose menu is open, or the one the pane holds. */
   target: () => Thread | null
   act: (a: Act, t: Thread) => void
@@ -209,6 +237,7 @@ function hear(e: KeyboardEvent): void {
   const act = chord(e)
   if (!act) return
   const all = [...keyed].map((one) => one.current).filter((one): one is Keys => one !== null)
+  if (all.some((one) => one.held)) return
   const list = all.find((one) => one.open) ?? all.find((one) => one.target() !== null)
   const t = list?.target()
   if (!list || !t) return
@@ -248,6 +277,11 @@ export function ConversationMenu({
   children: ReactElement
 }) {
   const act = useThreadActions()
+  // The conversation the pane holds NOW: a delete answered after the reader moved on leaves the room they moved to.
+  const holds = useRef(active)
+  holds.current = active
+  // The list's own element, for the row after one deleted.
+  const list = useId()
   const [menu, setMenu] = useState<'point' | 'dots' | null>(null)
   const [dialogue, setDialogue] = useState<Dialogue | null>(null)
   // The conversation the menu or a dialog acts on, by id, read from the list so
@@ -300,6 +334,7 @@ export function ConversationMenu({
   const keys = useRef<Keys | null>(null)
   keys.current = {
     open: menu !== null,
+    held: dialogue !== null,
     target: () => (menu !== null ? subject : active ? (threads.get(active) ?? null) : null),
     act: (a, t) => {
       // With no menu open, focus goes back to wherever the keys were pressed.
@@ -315,16 +350,24 @@ export function ConversationMenu({
 
   // The menu is named by its conversation: gui would name it by its trigger, the
   // list itself for a right-click, and the ⋯ for the other.
-  const named = subject ? titleOf(subject) : undefined
+  const title = subject ? titleOf(subject) : undefined
   const apple = mac()
   const entries: Entry[] = subject
     ? [
-        { key: 'rename', label: 'Rename', icon: <Pencil size={16} aria-hidden />, shortcut: said('rename', apple), run: () => ask('rename', subject) },
+        {
+          key: 'rename',
+          label: 'Rename',
+          icon: <Pencil size={16} aria-hidden />,
+          shortcut: said('rename', apple),
+          keys: named('rename'),
+          run: () => ask('rename', subject),
+        },
         {
           key: 'pin',
           label: subject.pinned ? 'Unpin' : 'Pin',
           icon: subject.pinned ? <PinOff size={16} aria-hidden /> : <Pin size={16} aria-hidden />,
           shortcut: said('pin', apple),
+          keys: named('pin'),
           run: () => void act.pin(subject),
         },
         { key: 'share', label: 'Share…', icon: <Share2 size={16} aria-hidden />, run: () => ask('share', subject) },
@@ -357,6 +400,7 @@ export function ConversationMenu({
         >
           <ContextMenuTrigger
             asChild
+            data-menu={list}
             onContextMenu={point}
             onPointerDown={(e: { pointerType?: string; target: EventTarget | null }) => {
               if (e.pointerType !== 'mouse') point(e)
@@ -364,24 +408,24 @@ export function ConversationMenu({
           >
             {children}
           </ContextMenuTrigger>
-          <ContextMenuContent minW={220} onCloseAutoFocus={back} aria-labelledby={undefined} aria-label={named}>
+          <ContextMenuContent minW={220} onCloseAutoFocus={back} aria-labelledby={undefined} aria-label={title}>
             {entries.map((one) =>
               'line' in one ? (
                 <ContextMenuSeparator key={one.key} />
               ) : (
-                <ContextMenuItem key={one.key} variant={one.destructive ? 'destructive' : 'default'} onSelect={one.run}>
+                <ContextMenuItem key={one.key} variant={one.destructive ? 'destructive' : 'default'} aria-keyshortcuts={one.keys} onSelect={one.run}>
                   <Face entry={one} Shortcut={ContextMenuShortcut} />
                 </ContextMenuItem>
               ),
             )}
           </ContextMenuContent>
         </ContextMenu>
-        <DropdownMenuContent align="start" minW={220} onCloseAutoFocus={back} aria-labelledby={undefined} aria-label={named}>
+        <DropdownMenuContent align="end" minW={220} onCloseAutoFocus={back} aria-labelledby={undefined} aria-label={title}>
           {entries.map((one) =>
             'line' in one ? (
               <DropdownMenuSeparator key={one.key} />
             ) : (
-              <DropdownMenuItem key={one.key} variant={one.destructive ? 'destructive' : 'default'} onSelect={one.run}>
+              <DropdownMenuItem key={one.key} variant={one.destructive ? 'destructive' : 'default'} aria-keyshortcuts={one.keys} onSelect={one.run}>
                 <Face entry={one} Shortcut={DropdownMenuShortcut} />
               </DropdownMenuItem>
             ),
@@ -394,7 +438,7 @@ export function ConversationMenu({
         onOpenChange={shut}
         onCloseAutoFocus={after}
         save={(t, words) => {
-          if (words !== t.title) void act.rename(t, words)
+          if (words !== titleOf(t)) void act.rename(t, words)
         }}
       />
       <Delete
@@ -403,9 +447,12 @@ export function ConversationMenu({
         onOpenChange={shut}
         onCloseAutoFocus={after}
         remove={(t) => {
-          const pane = active
+          // Focus goes on to the row after it, or the one before, not to the page.
+          const rows = [...(document.querySelector(`[data-menu="${list}"]`)?.querySelectorAll('[data-thread]') ?? [])]
+          const at = rows.findIndex((row) => row.getAttribute('data-thread') === t.id)
+          if (at >= 0) from.current = own(rows[at + 1] ?? rows[at - 1] ?? null)
           void act.remove(t).then((ok) => {
-            if (ok && pane === t.id) onGone()
+            if (ok && holds.current === t.id) onGone()
           })
         }}
       />
@@ -430,7 +477,8 @@ function Face({
       <Text flex={1} minW={0} fontSize="$2" color={entry.destructive ? DANGER : '$ink'} numberOfLines={1}>
         {entry.label}
       </Text>
-      {entry.shortcut ? <Shortcut>{entry.shortcut}</Shortcut> : null}
+      {/* Printed for the eye; the item's aria-keyshortcuts says it to assistive technology. */}
+      {entry.shortcut ? <Shortcut aria-hidden>{entry.shortcut}</Shortcut> : null}
     </>
   )
 }
@@ -464,6 +512,8 @@ export function ThreadRow({
   const [focused, setFocused] = useState(false)
   // Its own id: gui gives every trigger of one menu the menu's one id.
   const id = useId()
+  // What the ⋯ is for, said after its name: the row's title.
+  const about = useId()
   // The ⋯ and the age share one place: whichever shows, the other gives way.
   const shown = active || menus.open === t.id || focused
   // gui types these handlers by React Native's event; on the web they carry the DOM's.
@@ -495,6 +545,9 @@ export function ThreadRow({
       }}
     >
       {children}
+      <Text id={about} display="none">
+        {titleOf(t)}
+      </Text>
       {aside ? (
         <XStack
           position="absolute"
@@ -517,6 +570,7 @@ export function ThreadRow({
             // Named for what it is, not for the row: the row's own name is its title,
             // and a second button named with that title would answer for it too.
             aria-label="Chat options"
+            aria-describedby={about}
             id={id}
             data-slot="thread-options"
             width={26}
@@ -528,7 +582,8 @@ export function ThreadRow({
             bg="transparent"
             opacity={shown ? 1 : 0}
             $group-hover={{ opacity: 1 }}
-            $touchable={{ opacity: 1, width: 32, height: 32 }}
+            // A thumb's 44px on a touch screen (lib/tap.ts), centred on the row and over its edges.
+            $touchable={{ opacity: 1, minW: 44, minH: 44 }}
             hoverStyle={{ bg: '$hover' }}
             // Before gui's own press handler, which opens the menu and stops there.
             onPointerDownCapture={aim}
@@ -566,7 +621,8 @@ function Rename({
   }, [open, id])
   const submit = () => {
     const title = words.trim()
-    if (!title || !t) return
+    // Once: a second Enter while the dialog closes asks nothing.
+    if (!open || !title || !t) return
     onOpenChange(false)
     save(t, title)
   }
@@ -580,8 +636,9 @@ function Rename({
           onChangeText={setWords}
           aria-label="Chat title"
           maxLength={80}
-          onKeyDown={(e: { key?: string }) => {
-            if (e.key === 'Enter') submit()
+          onKeyDown={(e: { key?: string; keyCode?: number; nativeEvent?: { isComposing?: boolean } }) => {
+            // An Enter that ends an IME composition writes the word; it does not save.
+            if (e.key === 'Enter' && !e.nativeEvent?.isComposing && e.keyCode !== 229) submit()
           }}
         />
         <XStack gap="$2" justify="flex-end">
@@ -628,7 +685,8 @@ function Delete({
             rounded={999}
             disabled={!t}
             onPress={() => {
-              if (!t) return
+              // Once: a second press while the dialog closes would ask the store to delete it again.
+              if (!open || !t) return
               onOpenChange(false)
               remove(t)
             }}
