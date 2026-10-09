@@ -87,6 +87,29 @@ site from any surface.
   `send(text, images)` (≥ 0.6.20), a text file fenced under its name, any other
   kind refused by name.
 
+## A conversation's menu
+
+`thread.tsx` `ConversationMenu` wraps a list of conversation rows — the
+column's Recents and the shell's /chat list — and mounts ONE menu for all of
+them: gui's ContextMenu (a right-click at the cursor, a long-press on touch)
+and one gui Menu whose triggers are every row's ⋯ (a gui Menu takes many
+triggers and anchors to the one pressed), plus the Rename, Delete and Share
+dialogs (`Share.tsx` `ShareDialog`, the header's panel in a dialog). A row
+(`ThreadRow`) is its markup and a trigger. Entries: Rename (Ctrl+Alt+R), Pin
+or Unpin (Ctrl+Alt+P), Share…, Copy link, Open in new tab, Archive or
+Unarchive, Delete. The address of a conversation is `site(talk(id))`; a
+⌘/Ctrl-click or a middle-click on a row opens it in a new tab.
+
+- The keys act on the row whose menu is open, else on the conversation the
+  pane holds, never while the reader types (`chord.ts`). One capture-phase
+  listener on the page serves every list.
+- A change shows at once and is taken back with a toast on a refusal
+  (`pending.ts`): every `useThreadList` draws the changes in flight over what
+  it read. A settled change is kept until every list has read after it, by one
+  clock that stamps reads and answers, so no list flashes its older read.
+- Never `@hanzo/ui/product/menu`'s ContextMenu here: it portals its panel under
+  gui's `pointer-events: none` host and takes no click.
+
 ## Layout
 
 - `src/*.tsx` — the rooms, as `components/workspace/*` was in hanzo.ai; each is

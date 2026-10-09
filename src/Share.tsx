@@ -1,6 +1,8 @@
 'use client'
 
-// The conversation header's Share control and the panel it opens.
+// The conversation header's Share control and the panel it opens, and the same
+// panel as a dialog for a conversation's row menu (thread.tsx): one `Sharing`,
+// placed two ways.
 //
 // A link opens this ONE conversation, read only, as it stands when the link is
 // made (lib/share.ts), to the people who open it signed in. The panel copies
@@ -8,9 +10,9 @@
 // them, and revokes a link, which ends it for all of them. Recipients read and
 // do not reply: a conversation belongs to the member who started it.
 
-import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Check, Link2, Share2 } from 'lucide-react'
-import { Box, Button, Text, XStack, YStack } from '@hanzo/ui'
+import { Box, Button, Dialog, DialogContent, DialogTitle, Text, XStack, YStack } from '@hanzo/ui'
 import { hold, heldToken, link, Refused, shares, type ShareRow, type Viewer } from './lib/share'
 import { BAD } from './lib/mix'
 
@@ -59,9 +61,88 @@ export function Share({ thread }: { thread: string }) {
   )
 }
 
+/** The header's panel: hung under its button, shut by Escape or a press outside, focus starting inside. */
 function Panel({ thread, onClose }: { thread: string; onClose: () => void }) {
   const heading = useId()
   const box = useRef<HTMLDivElement | null>(null)
+
+  // Escape closes; a press outside closes; focus starts inside.
+  useEffect(() => {
+    box.current?.querySelector<HTMLElement>('button')?.focus()
+    const key = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    const press = (e: MouseEvent) => {
+      if (box.current && !box.current.contains(e.target as Node) && !(e.target as HTMLElement)?.closest?.('[aria-haspopup="dialog"]')) onClose()
+    }
+    document.addEventListener('keydown', key)
+    document.addEventListener('mousedown', press)
+    return () => {
+      document.removeEventListener('keydown', key)
+      document.removeEventListener('mousedown', press)
+    }
+  }, [onClose])
+
+  return (
+    <YStack
+      ref={box as never}
+      role="dialog"
+      aria-labelledby={heading}
+      position="absolute"
+      r={0}
+      t="100%"
+      mt="$2"
+      z="var(--z-dropdown)"
+      width={360}
+      maxW="calc(100vw - 32px)"
+      p="$4"
+      gap="$3"
+      rounded="$4"
+      borderWidth={1}
+      borderColor="$borderColor"
+      bg="$background"
+      boxShadow="0 16px 36px color-mix(in srgb, var(--pure-black) 30%, transparent)"
+    >
+      <Sharing
+        thread={thread}
+        note={`${heading}-said`}
+        title={
+          <Text id={heading} render="h2" fontSize="$4" fontWeight="600" color="$ink">
+            Share this chat
+          </Text>
+        }
+      />
+    </YStack>
+  )
+}
+
+/**
+ * The same panel as a dialog, for a conversation the pane need not hold: a row
+ * menu's Share…. `onCloseAutoFocus` says where focus goes when it shuts.
+ */
+export function ShareDialog({
+  thread,
+  open,
+  onOpenChange,
+  onCloseAutoFocus,
+}: {
+  thread: string | null
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onCloseAutoFocus?: (e: Event) => void
+}) {
+  const note = useId()
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent maxW={400} rounded="$6" gap="$3" onCloseAutoFocus={onCloseAutoFocus}>
+        {thread ? <Sharing thread={thread} note={note} title={<DialogTitle>Share this chat</DialogTitle>} /> : null}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/** What a link to one conversation is, who opened each, and the controls over them. */
+function Sharing({ thread, title, note }: { thread: string; title: ReactNode; note: string }) {
   const [live, setLive] = useState<ShareRow[] | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [wrong, setWrong] = useState<string | null>(null)
@@ -81,23 +162,6 @@ function Panel({ thread, onClose }: { thread: string; onClose: () => void }) {
       on = false
     }
   }, [thread])
-
-  // Escape closes; a press outside closes; focus starts inside.
-  useEffect(() => {
-    box.current?.querySelector<HTMLElement>('button')?.focus()
-    const key = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    const press = (e: MouseEvent) => {
-      if (box.current && !box.current.contains(e.target as Node) && !(e.target as HTMLElement)?.closest?.('[aria-haspopup="dialog"]')) onClose()
-    }
-    document.addEventListener('keydown', key)
-    document.addEventListener('mousedown', press)
-    return () => {
-      document.removeEventListener('keydown', key)
-      document.removeEventListener('mousedown', press)
-    }
-  }, [onClose])
 
   useEffect(() => {
     if (!copied) return
@@ -153,35 +217,15 @@ function Panel({ thread, onClose }: { thread: string; onClose: () => void }) {
   }
 
   return (
-    <YStack
-      ref={box as never}
-      role="dialog"
-      aria-labelledby={heading}
-      position="absolute"
-      r={0}
-      t="100%"
-      mt="$2"
-      z="var(--z-dropdown)"
-      width={360}
-      maxW="calc(100vw - 32px)"
-      p="$4"
-      gap="$3"
-      rounded="$4"
-      borderWidth={1}
-      borderColor="$borderColor"
-      bg="$background"
-      boxShadow="0 16px 36px color-mix(in srgb, var(--pure-black) 30%, transparent)"
-    >
-      <Text id={heading} render="h2" fontSize="$4" fontWeight="600" color="$ink">
-        Share this chat
-      </Text>
+    <>
+      {title}
       <Text fontSize="$2" color="$soft" lineHeight="$3">
         People who open the link signed in can read this chat as it is now, and you see who they are below. They
         cannot reply, and messages you send later are not shared.
       </Text>
 
       <XStack items="center" gap="$2">
-        <Button size="sm" onClick={() => void copy()} disabled={busy !== null || live === null} aria-describedby={`${heading}-said`}>
+        <Button size="sm" onClick={() => void copy()} disabled={busy !== null || live === null} aria-describedby={note}>
           <XStack items="center" gap="$1.5">
             {copied ? <Check size={14} aria-hidden /> : <Link2 size={14} aria-hidden />}
             <Text fontSize="$2" color="inherit">
@@ -193,7 +237,7 @@ function Panel({ thread, onClose }: { thread: string; onClose: () => void }) {
           Read only
         </Text>
       </XStack>
-      <Text id={`${heading}-said`} aria-live="polite" fontSize="$1" color="$soft" minH={16}>
+      <Text id={note} aria-live="polite" fontSize="$1" color="$soft" minH={16}>
         {copied ? 'The link is on your clipboard.' : ''}
       </Text>
 
@@ -275,6 +319,6 @@ function Panel({ thread, onClose }: { thread: string; onClose: () => void }) {
           {wrong}
         </Text>
       ) : null}
-    </YStack>
+    </>
   )
 }

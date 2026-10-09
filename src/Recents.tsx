@@ -4,9 +4,9 @@
 // conversations (`/v1/agents/chat/conversations`, `useThreadList`), Dev its
 // coding runs (`/v1/agent/sessions?kind=coding`, @hanzo/build `useSessions`). Each
 // mode reads its own store. The menu beside the heading narrows, groups and sorts
-// the list; the choice is kept per mode in this browser. A conversation's row
-// carries its own menu (thread.tsx): pinned ones list first, under Pinned, and
-// Chat's Status shows the archived ones apart.
+// the list; the choice is kept per mode in this browser. Chat's rows share one
+// menu (thread.tsx `ConversationMenu`): pinned ones list first, under Pinned,
+// and Chat's Status shows the archived ones apart.
 
 import { useEffect, useId, useMemo, useRef } from 'react'
 import { ScrollView, SizableText, XStack, YStack } from '@hanzo/gui'
@@ -17,7 +17,7 @@ import { DropdownMenu, type DropdownMenuProps } from '@hanzo/ui'
 import { SidebarItem, StatusDot } from '@hanzo/ui/chat'
 import { useKept } from './kept'
 import { ago, arrange, chats, MENUS, PLAIN, runs, SINCE, viewOf, type Mode, type Option, type Recent, type View } from './recent'
-import { ThreadRow, useThreadList } from './thread'
+import { ConversationMenu, ThreadRow, useThreadList } from './thread'
 
 /** The menu's items: each section a heading and its options, the one in force checked. */
 function items(mode: Mode, view: View, set: (v: View) => void): NonNullable<DropdownMenuProps['items']> {
@@ -162,6 +162,7 @@ function List({
   onOpen: (r: Recent) => void
   /** Chat's conversations by id: a row of one carries its menu. */
   threads?: Map<string, Thread>
+  /** Moves the pane to a new conversation: where it goes when the one it holds is deleted. */
   onNew?: () => void
 }) {
   const label = useId()
@@ -208,7 +209,7 @@ function List({
     const t = threads?.get(r.id)
     if (t)
       return (
-        <ThreadRow key={r.id} t={t} active={open(r)} aside={age} onGone={onNew}>
+        <ThreadRow key={r.id} t={t} active={open(r)} aside={age}>
           {item}
         </ThreadRow>
       )
@@ -223,6 +224,35 @@ function List({
       </YStack>
     )
   }
+
+  const body = groups.length ? (
+    <YStack role="list" aria-labelledby={label} gap={1}>
+      {groups.map((g) =>
+        g.title ? (
+          <YStack role="listitem" key={g.title} gap={1} pt="$2">
+            <SizableText size="$1" color="$soft" px="$2" pb="$1">
+              {g.title}
+            </SizableText>
+            <YStack role="list" aria-label={g.title} gap={1}>
+              {g.rows.map(row)}
+            </YStack>
+          </YStack>
+        ) : (
+          g.rows.map(row)
+        ),
+      )}
+    </YStack>
+  ) : reading ? (
+    <Note>{mode === 'chat' ? 'Reading your chats…' : 'Reading your runs…'}</Note>
+  ) : error ? null : words.trim() ? (
+    <Note>{`Nothing matches “${words.trim()}”.`}</Note>
+  ) : view.status === 'archived' ? (
+    <Note>No archived chats.</Note>
+  ) : narrowed ? (
+    <Note>Nothing in this view.</Note>
+  ) : (
+    <Note>{mode === 'chat' ? 'No chats yet. Say something and it lands here.' : 'No runs yet.'}</Note>
+  )
 
   return (
     <YStack data-slot="recents" flex={1} minH={0} mt="$2">
@@ -263,33 +293,13 @@ function List({
       </XStack>
       <ScrollView flex={1} showsVerticalScrollIndicator={false}>
         {error ? <Note>{error.message}</Note> : null}
-        {groups.length ? (
-          <YStack role="list" aria-labelledby={label} gap={1}>
-            {groups.map((g) =>
-              g.title ? (
-                <YStack role="listitem" key={g.title} gap={1} pt="$2">
-                  <SizableText size="$1" color="$soft" px="$2" pb="$1">
-                    {g.title}
-                  </SizableText>
-                  <YStack role="list" aria-label={g.title} gap={1}>
-                    {g.rows.map(row)}
-                  </YStack>
-                </YStack>
-              ) : (
-                g.rows.map(row)
-              ),
-            )}
-          </YStack>
-        ) : reading ? (
-          <Note>{mode === 'chat' ? 'Reading your chats…' : 'Reading your runs…'}</Note>
-        ) : error ? null : words.trim() ? (
-          <Note>{`Nothing matches “${words.trim()}”.`}</Note>
-        ) : view.status === 'archived' ? (
-          <Note>No archived chats.</Note>
-        ) : narrowed ? (
-          <Note>Nothing in this view.</Note>
+        {threads ? (
+          // Held while the list empties, so a dialog its last row opened closes in place.
+          <ConversationMenu threads={threads} active={rows.find(open)?.id ?? null} onGone={onNew}>
+            <YStack>{body}</YStack>
+          </ConversationMenu>
         ) : (
-          <Note>{mode === 'chat' ? 'No chats yet. Say something and it lands here.' : 'No runs yet.'}</Note>
+          body
         )}
       </ScrollView>
     </YStack>

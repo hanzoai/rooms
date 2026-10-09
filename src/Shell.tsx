@@ -74,7 +74,7 @@ import {
 } from "@hanzo/ai/react";
 import type { Thread } from "@hanzo/ai";
 import { PINNED } from "./recent";
-import { ThreadRow, useThreadList } from "./thread";
+import { ConversationMenu, ThreadRow, useThreadList } from "./thread";
 import { Box, XStack, YStack, Text } from "@hanzo/ui";
 // THE PAPER LADDER. `sheet(n)` is a fill AND the light on it, published as a
 // pair by @hanzo/design, so a surface asks for a HEIGHT instead of composing a
@@ -584,6 +584,7 @@ function Chats({
   }, [threads, customThreads]);
 
   const found = mergedThreads.filter((t) => matches(t.title || "Untitled", filter));
+  const byId = useMemo(() => new Map(threads.map((t) => [t.id, t])), [threads]);
 
   // PINNED FIRST, by the server's pin (thread.tsx), then the days.
   const shown = found.filter((t) => !t.thread?.pinned);
@@ -613,43 +614,48 @@ function Chats({
 
   return (
     <>
-      {mine}
-      {mine ? null : bands.map((band) => (
-        <SidebarSection key={band.label} label={band.label}>
-          {band.rows.map((t) => {
-            const item = (
-            <SidebarItem
-              key={t.id}
-              active={t.id === thread}
-              onPress={() => {
-                open(t.id);
-                onPick?.();
-              }}
-            >
-              <YStack minW={0}>
-                {/* A call or a group says so with the shell's own monochrome glyph, never a colour emoji. */}
-                <XStack items="center" gap="$1.5" minW={0}>
-                  {t.kind === "call" ? <Video size={13} color="var(--muted-foreground)" aria-label="Call" /> : null}
-                  {t.kind === "group" ? <Users size={13} color="var(--muted-foreground)" aria-label="Group" /> : null}
-                  <Text fontSize="$2" color="$ink" numberOfLines={1}>
-                    {t.title || "Untitled"}
-                  </Text>
-                </XStack>
-                <Span id={t.id} updatedAt={t.updatedAt} />
-              </YStack>
-            </SidebarItem>
-            );
-            // A stored conversation carries its menu; a call or a group is no conversation of the store's.
-            return t.thread ? (
-              <ThreadRow key={t.id} t={t.thread} active={t.id === thread} listed={false}>
-                {item}
-              </ThreadRow>
-            ) : (
-              item
-            );
-          })}
-        </SidebarSection>
-      ))}
+      {/* One menu for every stored conversation here (thread.tsx), whichever band it is in. */}
+      <ConversationMenu threads={byId} active={thread}>
+        <YStack>
+          {mine}
+          {mine ? null : bands.map((band) => (
+            <SidebarSection key={band.label} label={band.label}>
+              {band.rows.map((t) => {
+                const item = (
+                <SidebarItem
+                  key={t.id}
+                  active={t.id === thread}
+                  onPress={() => {
+                    open(t.id);
+                    onPick?.();
+                  }}
+                >
+                  <YStack minW={0}>
+                    {/* A call or a group says so with the shell's own monochrome glyph, never a colour emoji. */}
+                    <XStack items="center" gap="$1.5" minW={0}>
+                      {t.kind === "call" ? <Video size={13} color="var(--muted-foreground)" aria-label="Call" /> : null}
+                      {t.kind === "group" ? <Users size={13} color="var(--muted-foreground)" aria-label="Group" /> : null}
+                      <Text fontSize="$2" color="$ink" numberOfLines={1}>
+                        {t.title || "Untitled"}
+                      </Text>
+                    </XStack>
+                    <Span id={t.id} updatedAt={t.updatedAt} />
+                  </YStack>
+                </SidebarItem>
+                );
+                // A stored conversation carries its menu; a call or a group is no conversation of the store's.
+                return t.thread ? (
+                  <ThreadRow key={t.id} t={t.thread} active={t.id === thread} listed={false}>
+                    {item}
+                  </ThreadRow>
+                ) : (
+                  item
+                );
+              })}
+            </SidebarSection>
+          ))}
+        </YStack>
+      </ConversationMenu>
       <SharedWithYou filter={filter} onPick={onPick} />
     </>
   );
