@@ -75,7 +75,7 @@ repository or a site from any surface.
 ## Rules the rooms keep
 
 - No place hides behind a More. Column draws Dev's places from @hanzo/build's
-  `nav` (≥ 0.2.52), the one list every rail draws, each a row under a quiet
+  `nav` (≥ 0.2.53), the one list every rail draws, each a row under a quiet
   group label (Work, Make, Run, Setup); Shell draws its Setup rows the same way,
   under the rooms. Collapsed, Column keeps every place as a mark.
 - Skills, connectors, plugins and agents have one home, Dev's Customize: Shell's
@@ -179,7 +179,7 @@ Gates: `pnpm typecheck`, `pnpm lint:design` (ratchet in
 
 ## Plan usage
 
-The plan is named, read and drawn once, in @hanzo/build (≥ 0.2.52), and the
+The plan is named, read and drawn once, in @hanzo/build (≥ 0.2.53), and the
 rooms mount it: `label` names a plan by family with its rung as a small tag
 (`max-20x` reads Max, 20x; never a slug or an id), `useStanding` reads the
 tier, the limits, the free allowance and the balance, `Meter` leads every
