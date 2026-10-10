@@ -10,6 +10,7 @@
 
 import type { ReactNode } from 'react'
 import { Anchor, Text, View, XStack, YStack } from '@hanzo/gui'
+import { Code } from '@hanzo/ui/chat'
 import { destination, read, type Token, type Tokens } from './lib/prose'
 
 const INK = 'var(--foreground)'
@@ -183,16 +184,14 @@ function blocks(tokens: Token[] | undefined, tone: Tone): ReactNode[] {
         return <List key={i} list={t as Tokens.List} tone={tone} />
       case 'table':
         return <Table key={i} table={t as Tokens.Table} tone={tone} />
-      // A fenced block scrolls SIDEWAYS on its own: wrapping code changes what
-      // it says, and letting it push the message wider drags the whole
-      // transcript into a horizontal scroll.
+      // A fenced block is @hanzo/ui's `Code`, the frame Dev's answers draw:
+      // its language, a copy control, and a body that scrolls SIDEWAYS on its
+      // own, because wrapping code changes what it says.
       case 'code':
         return (
-          <View key={i} render="pre" m={0} overflowX="auto" px="$3.5" py="$3" rounded="$3" bg={GROUND}>
-            <Text render="code" color={tone} fontFamily="$mono" fontSize="$1" lineHeight="$2" whiteSpace="pre">
-              {t.text}
-            </Text>
-          </View>
+          <Code key={i} language={(t as Tokens.Code).lang || 'text'} value={t.text}>
+            {t.text}
+          </Code>
         )
       case 'blockquote':
         return (

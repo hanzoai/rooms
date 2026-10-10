@@ -35,7 +35,6 @@ import {
   useAgent,
   useAi,
   useChat,
-  useModels,
   type ChatMessage,
 } from "@hanzo/ai/react";
 import {
@@ -44,39 +43,52 @@ import {
   hasConsent,
   isFree,
 } from "@hanzo/ai";
-import { ASK, Chat as ChatSurface, Code, Failure, Parts, words, type Said } from "@hanzo/ui/chat";
+import { ASK, Chat as ChatSurface, Failure, Parts, words, type Said } from "@hanzo/ui/chat";
 import { carriedIn, compose, partsOf, said as told, weigh } from "./lib/attach";
 import { download, dropped, fileOf, pct, readable, refOf, retrieve, type Api, type FileRef, type WorkFile } from "./lib/files";
 import { channel, drop, hold, landed, localOf, spend, take, usePane, useWorkFile, type Held, type Via } from "./pane";
 import { Face, brief as roomBrief, join, roleOf, roomTurn, roster as rosterLine, rosterOf, speakers, speaksOf, voiceOf } from "./cast";
-import { SpeakButton, cleanForSpeech } from "./speech";
+import { cleanForSpeech, speakAgent } from "./speech";
 import { Crew, HOUSE, useCrew } from "./crew";
 import { called } from "./team";
-import { Anchor, Box, Button, Text, Tooltip, TooltipContent, TooltipTrigger, View, XStack, YStack } from "@hanzo/ui";
-import { Control } from "@hanzo/composer";
+import { Anchor, Box, Button, Text, View, XStack, YStack } from "@hanzo/ui";
+import { useMedia } from "@hanzo/gui";
 import { useIam, useIamToken } from "@hanzo/iam/react";
-import { hasSession, org } from "./lib/session";
+import { bearer, hasSession, org } from "./lib/session";
+import { api } from "./lib/api";
 import { chats, house, paidPlan, paused, setCreditsAfterAllowance, useLimits } from "./lib/limits";
-import { parseModels } from "@hanzo/ui/models/catalog";
 import { LimitedBanner } from "@hanzo/ui/product/LimitedBanner";
 import type { LimitAction } from "@hanzo/ui/product/limits";
 import { WEB } from "./lib/web";
 import { useHydrated } from "./lib/hydrated";
 import { base, served } from "./lib/ai";
-import { onServed, type Served } from "./lib/served";
-import { refused as worded, speech, useDictation, useTalk, useVoice, Voice } from "@hanzo/voice";
-import { ArrowUp, AudioLines, FileText, Image as ImageMark, Mic, Paperclip, Pin, Square, PanelRight, X } from "lucide-react";
-import { ENSO, FREE } from "./lib/ai";
+import { onServed, type Served as Heard } from "./lib/served";
+import { refused as worded, speech, useDictation, useTalk, useVoice } from "@hanzo/voice";
+import { FileText, Image as ImageMark, Paperclip, Pin, X } from "lucide-react";
+import { FREE } from "./lib/ai";
 import { openThread, showSettings, useOpen } from "./open";
 import { Beside, Framed } from "./Shell";
-import { pane } from "./ground";
-import { RightPane, addressOf, look, usePinned, type Mark } from "./RightPane";
-import { useMedia } from "@hanzo/gui";
-import { Take } from "./copy";
+import { SEED, look, useKinds, type Mark } from "./RightPane";
 import { Share } from "./Share";
 import { useThreadActions, useThreadList } from "./thread";
-import { useModel } from "./model";
-import { Enso, nameOf, useEffort } from "./enso";
+import {
+  artifacts,
+  lead,
+  nameOf,
+  PAGE,
+  Panel,
+  PanelToggle,
+  prompt,
+  renders,
+  Reply,
+  Served,
+  useDeck,
+  useKey,
+  useMind,
+  usePanel,
+  type Artifact,
+  type Listen,
+} from "@hanzo/build";
 import { checkoutUrl } from './lib/pay';
 import { Upgrade, useFree, type Ask } from './Upgrade';
 import { enter, LOGIN } from './lib/destination';
@@ -202,10 +214,6 @@ function useSeed(initial: string | undefined, set: (t: string) => void) {
     if (initial) apply.current(initial);
   }, [initial]);
 }
-
-/** The circle both controls are cut from: @hanzo/composer's `Control`, at the
- *  30px a line of this composer's footer row holds. */
-const ROUND = 30;
 
 export function Chat() {
   const { isAuthenticated, isLoading } = useIam();
@@ -707,10 +715,11 @@ function Thread({
    * that settles after mount. Picking from the menu still wins, permanently.
    */
   const [asking, setAsking] = useState<string | null>(null);
-  // The setter is taken now, not just the value: the override moved from
-  // Settings into the composer's own panel, so this is where it is written.
-  const [preferred, setPreferred] = useModel();
-  const [effort, setEffort] = useEffort();
+  // THE MODEL AND THE EFFORT are the one choice Chat and Dev share
+  // (@hanzo/build `useMind`): the catalog from `GET /v1/models` and what the
+  // reader kept, changed from the composer's chip or from Settings.
+  const target = useMemo(() => ({ api: api(), token: bearer, org: org() }), [anonymous]); // eslint-disable-line react-hooks/exhaustive-deps
+  const mind = useMind(target);
   const ai = useAi();
   // In the app's frame the composer floats on the pane as a pane of its own.
   const framed = useContext(Framed);
@@ -727,33 +736,47 @@ function Thread({
   const at = channel(opened);
   // The first of them: what a surface that addresses one person reads.
   const withWhom = room[0] ?? null;
-  // Whether the column beside this conversation is showing its summary, and the
-  // switch for it. Kept per conversation by `pane.ts`, so the header's control
-  // reflects THIS room rather than the last one that was open.
-  const [pinned, flipPin] = usePinned();
-  // The frame draws the column only from `$lg` (Shell.tsx `Paned`).
+  // THE SIDE PANEL (@hanzo/build `Panel`), the one Dev's runs open too: open or
+  // shut as Chat was left on a laptop, a sheet asked for on a phone, its tabs
+  // kept per conversation. The header's Panel button and ⌘. move it.
   const wide = useMedia().lg;
+  const [panel, setPanel] = usePanel("chat", false, wide);
+  const deck = useDeck(`chat:${at}`, SEED);
+  useKey(() => setPanel(!panel));
+  // On a laptop the frame's column is the panel's; a close from the frame (its
+  // edge pulled shut, the shell's own control) comes back into `panel`.
+  useEffect(() => {
+    if (wide) showAside(panel ? "tasks" : null);
+  }, [panel, wide, showAside]);
+  const wasAside = useRef(aside);
+  useEffect(() => {
+    if (wide && wasAside.current !== aside) {
+      if (aside === null && panel) setPanel(false);
+      else if (aside !== null && !panel) setPanel(true);
+    }
+    wasAside.current = aside;
+    // Answers the frame's moves only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aside]);
+  /** What an answer wrote, open in the panel as a page rendered from its own bytes. */
+  const see = useCallback(
+    (a: Artifact) => {
+      deck.open({ kind: PAGE, title: a.name, body: a.body, type: a.mime });
+      setPanel(true);
+    },
+    [deck, setPanel],
+  );
   /**
-   * OPENS A FILE A MESSAGE CARRIES, by the road the column's Sources row takes
-   * (`look`): a tab in the browser beside the conversation, the column opened
-   * first when it is shut. A phone has no column — the frame spends the width
-   * on the room — so there the file opens in a tab of the browser's own, minted
-   * before the signed address is asked for, since a window opened after an
-   * await is a popup the browser blocks.
+   * OPENS A FILE A MESSAGE CARRIES, by the road the Sources tab takes (`look`):
+   * a page tab in the side panel, the panel opened when it is shut — a column on
+   * a laptop, a sheet on a phone.
    */
   const openFile = useCallback(
     (m: Mark) => {
-      if (wide) {
-        if (aside === null) showAside("tasks");
-        void look(at, m, ai);
-        return;
-      }
-      const tab = window.open("", "_blank");
-      if (!tab) return;
-      tab.opener = null;
-      void addressOf(m, ai).then((href) => (href ? tab.location.replace(href) : tab.close()));
+      void look(deck, m, ai);
+      setPanel(true);
     },
-    [wide, aside, showAside, at, ai],
+    [deck, ai, setPanel],
   );
   /**
    * WHO YOU ARE TALKING TO, when it is somebody rather than the plain model.
@@ -861,20 +884,16 @@ function Thread({
   // A SPEECH MODEL NEVER ANSWERS A CHAT TURN. The catalog lists the
   // transcriber and the voice beside the chat models; one that names its
   // outputs and names no text (`chats`) is neither offered nor fallen back to.
-  const { models: catalog } = useModels();
-  const models = useMemo(() => catalog.filter(chats), [catalog]);
+  const listed = mind.models;
+  const models = useMemo(() => listed.filter(chats), [listed]);
   // EVERY MODEL THE GATEWAY LISTS is offered here, through the one picker, and
   // read from the catalog's own fields (`parseModels`): its class, its family.
   // A premium model is picked for THIS conversation and never remembered as
-  // the default, so the next chat starts on Enso again; any other pick is the
-  // reader's default. A preference kept from before for a premium model is
-  // not a default either, so the house router is asked for instead. An agent's
-  // own model is sent as it is named; the gateway says which model answered
-  // (`servedBy`).
-  const listed = useMemo(() => parseModels(catalog), [catalog]);
+  // the default (`useMind`), so the next chat starts on what was kept. An
+  // agent's own model is sent as it is named; the gateway says which model
+  // answered (`servedBy`).
   const rowOf = (id: string) => listed.find((m) => m.id === id);
-  const [picked, setPicked] = useState<string | null>(null);
-  const wanted = picked ?? (preferred && rowOf(preferred)?.class !== "premium" ? preferred : ENSO);
+  const wanted = mind.model;
   // A model the catalog lists is sent as picked, whatever it answers with; only
   // a name the catalog does not list falls to one that converses (`served`).
   const sent = anonymous ? FREE : wanted;
@@ -884,11 +903,11 @@ function Thread({
   // bars and no near note — those live on Settings → Usage. It says something
   // only once the reader is turned away: a reply answered from a free model, or
   // a refusal.
-  const { limits, notice, reload: reread } = useLimits(!anonymous, org(), (id) => nameOf(catalog, id));
+  const { limits, notice, reload: reread } = useLimits(!anonymous, org(), (id) => nameOf(id, listed));
   const held = paidPlan(limits);
   const pause = notice && (notice.fallback || notice.refused) ? notice : null;
   // The banner's words and ways: the plan by name, when it comes back, and the two ways on.
-  const banner = pause ? paused(pause, limits?.plan ?? "", (id) => nameOf(catalog, id)) : null;
+  const banner = pause ? paused(pause, limits?.plan ?? "", (id) => nameOf(id, listed)) : null;
   // EVERY MODEL IS CHOSEN, never asked for: one the plan does not cover still
   // picks, and the gateway answers it with the policy's refusal or from Enso,
   // which the room then shows. A turn the gateway refuses `plan_required`
@@ -896,11 +915,6 @@ function Thread({
   // free-lane notice.
   const free = useFree(!anonymous) && !held;
   const [ask, setAsk] = useState<Ask | null>(null);
-  const choose = (id: string) => {
-    if (rowOf(id)?.class === "premium") return setPicked(id);
-    setPicked(null);
-    setPreferred(id);
-  };
   // KEEPING THE CONVERSATION is the reader's account, not this pane's choice:
   // the store is per-org, so a signed-in reader has somewhere for it to go and
   // an anonymous one does not. `thread` names the conversation being continued
@@ -917,11 +931,11 @@ function Thread({
     // lookups the platform's assistant uses, run inside the completion by the
     // client's fetch (lib/web.ts), so a question about the weather or the news
     // is answered from what the web says now.
-    params: { reasoning_effort: effort, ...(!anonymous && house(rowOf(model)?.family) ? { tools: WEB } : {}) },
+    params: { reasoning_effort: mind.effort, ...(!anonymous && house(rowOf(model)?.family) ? { tools: WEB } : {}) },
     ...(open ? { thread: open } : {}),
     onError: (e) => {
       const needs = planRequired(e);
-      if (needs && free) setAsk({ ...needs, model: nameOf(models, model) });
+      if (needs && free) setAsk({ ...needs, model: nameOf(model, listed) });
     },
   });
   const { send, set, error, thread: kept } = chat;
@@ -1187,7 +1201,7 @@ function Thread({
     (a: LimitAction) => {
       setActWrong("");
       if (a.kind === "switch") {
-        if (a.model) choose(a.model);
+        if (a.model) mind.pick(a.model);
         return;
       }
       if (a.kind !== "credits") {
@@ -1204,9 +1218,9 @@ function Thread({
         })
         .catch((e: unknown) => setActWrong(e instanceof Error ? e.message : "Credits could not be turned on."));
     },
-    // `choose` is rebuilt each render; the handler follows it.
+    // `mind.pick` is rebuilt each render; the handler follows it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [reread, speak, failures, picked, preferred, listed],
+    [reread, speak, failures, mind.model, listed],
   );
 
   // A TURN THAT NEVER SPEAKS IS STOPPED. A stream that stays open with nothing
@@ -1229,7 +1243,7 @@ function Thread({
 
   // WHICH MODEL ANSWERED each reply, by the reply's turn id, as the gateway named
   // it while the reply streamed (lib/served.ts).
-  const [servedBy, setServedBy] = useState<Record<string, Served>>({});
+  const [servedBy, setServedBy] = useState<Record<string, Heard>>({});
   useEffect(
     () =>
       onServed((heard) => {
@@ -1243,13 +1257,36 @@ function Thread({
     // A router named back as itself says nothing about who answered.
     if (!heard || (heard.served === heard.asked && ROUTERS.has(heard.asked))) return null;
     const fell = heard.asked && heard.asked !== heard.served && !ROUTERS.has(heard.asked);
-    return (
-      <Text fontSize="$1" color="$soft">
-        answered by {heard.served}
-        {fell ? ` · ${heard.asked} was unavailable` : ""}
-      </Text>
-    );
+    return <Served served={heard.served} asked={fell ? heard.asked : undefined} />;
   };
+
+  // LISTEN reads a part in its speaker's cast voice, through the platform.
+  const listen = useCallback(
+    (who?: string): Listen =>
+      (text, done) =>
+        speakAgent(text, { agent: who, token, onEnd: done, onError: done }),
+    [token],
+  );
+  /** The way to open what a part of an answer wrote, where it wrote something. */
+  const opener = (text: string) => {
+    const a = lead(artifacts(text));
+    return a ? () => see(a) : undefined;
+  };
+
+  // WHAT AN ANSWER MAKES OPENS BESIDE IT. With the panel open, a page or a
+  // picture an answer just finished writing is opened as a tab; with it shut,
+  // the answer's own Open does it.
+  const writing = useRef(false);
+  useEffect(() => {
+    const was = writing.current;
+    writing.current = chat.streaming;
+    if (!was || chat.streaming || !panel) return;
+    const answer = [...turns.current].reverse().find((m) => m.role === "assistant");
+    const made = typeof answer?.content === "string" ? artifacts(answer.content).filter(renders) : [];
+    if (made.length) see(made[made.length - 1]!);
+    // On the turn's end only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chat.streaming]);
 
   // WHAT WAS SAID, which is not everything the thread holds. The persona rides
   // as a system turn so the wire carries it; drawing it would print a character
@@ -1268,6 +1305,8 @@ function Thread({
   // record's own picture. Its own answer comes first, which is the order
   // `Face` already states for every other surface.
   const portrait = mate?.avatar ?? persona?.avatar ?? roleOf(withWhom)?.portrait;
+  // Chat's kinds of tab in the side panel: Artifacts and Sources, read from the turns.
+  const kinds = useKinds({ at, said, held: files, deck });
 
   /** Whether the field has focus, so the FRAME can wear the ring the field is
    *  no longer allowed to draw. `:focus-within` would say this in CSS; the
@@ -1384,9 +1423,9 @@ function Thread({
     const said = !failed
       ? "No answer came back for this question."
       : failed.stalled
-        ? `${nameOf(models, model)} sent nothing for ${STALL / 60_000} minutes, so the turn was stopped.`
+        ? `${nameOf(model, listed)} sent nothing for ${STALL / 60_000} minutes, so the turn was stopped.`
         : failed.empty
-          ? `${nameOf(models, model)} answered with nothing.`
+          ? `${nameOf(model, listed)} answered with nothing.`
           : bill
             ? banner?.message ?? notice?.message ?? (bill.message || plainly(wrong, "this conversation"))
             : resign
@@ -1394,7 +1433,7 @@ function Thread({
               ? "Sign in to ask this."
               : "Your session needs to be refreshed. Sign in to reconnect."
             : how?.provider
-              ? `${familyOf(model) || nameOf(models, model)} is unavailable right now.`
+              ? `${familyOf(model) || nameOf(model, listed)} is unavailable right now.`
               : plainly(wrong, "this conversation");
     return (
       <Failure onRetry={resign || bill?.code === "free_plan_cap" ? undefined : () => speak(text, question.id)}>
@@ -1420,7 +1459,7 @@ function Thread({
                   Sign in
                 </Button>
               ) : lift ? (
-                <Button size="sm" variant="outline" onClick={() => setAsk({ ...lift, model: nameOf(models, model) })}>
+                <Button size="sm" variant="outline" onClick={() => setAsk({ ...lift, model: nameOf(model, listed) })}>
                   Upgrade
                 </Button>
               ) : how?.visitor ? (
@@ -1615,57 +1654,25 @@ function Thread({
           ) : null}
         </XStack>
 
-        <XStack items="center" gap="$1">
-          {/* THE SUMMARY'S OWN CONTROL, in the conversation's header rather than
-              inside the column it acts on — a control that hides a pane cannot
-              live in the pane it hides, or pressing it takes away the thing you
-              would press to bring it back.
-
-              It opens the column first where there is none, because a summary
-              has nowhere to appear until the frame has given the room a column;
-              two presses to reach "column open, summary hidden" is the honest
-              cost of one button answering one question. `aria-pressed` is that
-              question — is the summary showing — and not the pin's own flag,
-              which stays true while the column is shut. */}
-          <Box
-            render="button"
-            onClick={() => {
-              if (aside === null) {
-                showAside("tasks");
-                if (!pinned) flipPin();
-                return;
-              }
-              flipPin();
-            }}
-            aria-label="Toggle pinned summary"
-            aria-pressed={aside !== null && pinned}
-            // NOT ON A PHONE, because there is nothing for it to show there.
-            // The frame draws the column only above `$lg` — it spends the whole
-            // width on the room below that (`Shell.tsx`) — so this control
-            // would press, change the stored pin, and move nothing on screen.
-            // A button whose effect is invisible is a button that does nothing.
-            // Same breakpoint as the column, so the two cannot drift apart.
-            display="none"
-            $lg={{ display: "flex" }}
-            p="$2"
-            rounded="$2"
-            hoverStyle={{ bg: "$hover" }}
-          >
-            <PanelRight size={15} color="var(--soft, var(--muted-foreground))" />
-          </Box>
+        <XStack items="center" gap="$2">
           {open ? <Share thread={open} /> : null}
+          {/* THE PANEL'S OWN CONTROL, at every size and in the header rather
+              than in the column it opens: a control that hides a pane cannot
+              live in the pane it hides. A word beside the mark, because a
+              glyph alone was a control nobody found. Dev's run header has the
+              same one in the same place. */}
+          <PanelToggle open={panel} onToggle={() => setPanel(!panel)} />
         </XStack>
       </XStack>
 
-
-      {/* The frame owns the column; this is what /chat puts in it. The roster
-          of agents lives here rather than in the shell, because it is this
-          room's — a shell that draws one room's pane can serve only that room.
-          `Work` reads the same conversation and sits under it. */}
-      <Beside>
-        <RightPane said={said} onClose={() => showAside(null)} />
-        <Work persona={persona ?? null} room={room} model={model} messages={said} />
-      </Beside>
+      {/* The frame owns the column on a laptop; this is what Chat puts in it.
+          On a phone the panel is a sheet over the room instead. */}
+      {wide && aside !== null ? (
+        <Beside>
+          <Panel side={deck} kinds={kinds} onHide={() => setPanel(false)} label="Conversation details" />
+        </Beside>
+      ) : null}
+      {!wide && panel ? <Panel side={deck} kinds={kinds} sheet onHide={() => setPanel(false)} label="Conversation details" /> : null}
 
       {isFree(model) ? (
         <Text
@@ -1762,12 +1769,7 @@ function Thread({
                       </XStack>
                     ) : null}
                     <Prose text={part.text} />
-                    {part.text ? (
-                      <XStack ml="$-1" items="center" gap="$2">
-                        <Take text={part.text} says="this answer" />
-                        <SpeakButton text={part.text} agentName={part.who ?? withWhom ?? undefined} />
-                      </XStack>
-                    ) : null}
+                    {part.text ? <Reply text={part.text} listen={listen(part.who ?? withWhom ?? undefined)} onOpen={opener(part.text)} /> : null}
                   </YStack>
                 ))}
                 {silent.length ? (
@@ -1782,21 +1784,11 @@ function Thread({
           return (
             <YStack gap="$1">
               <Prose text={said} />
-              {/* TAKE THE ANSWER WITH YOU. `Take` copies the SOURCE — the
-                  markdown the model wrote — rather than what is on screen,
-                  which is what makes an answer paste into an editor with its
-                  fences and its table still in it. It rests dim and comes up on
-                  hover or focus, so a keyboard and a thumb can reach it too.
-
-                  Only an answer, and only one with words in it: your own turn
-                  is already in your hands, and a control under an empty bubble
-                  offers to copy nothing. */}
-              {turn.role === "assistant" && said ? (
-                <XStack ml="$-1" items="center" gap="$2">
-                  <Take text={said} says="this answer" />
-                  <SpeakButton text={said} agentName={withWhom} />
-                </XStack>
-              ) : null}
+              {/* UNDER AN ANSWER, the row Dev's answers have too (@hanzo/build
+                  `Reply`): copy the markdown as written, listen in the
+                  speaker's voice, and open what it wrote in the side panel.
+                  Only an answer, and only one with words in it. */}
+              {turn.role === "assistant" && said ? <Reply text={said} listen={listen(withWhom ?? undefined)} onOpen={opener(said)} /> : null}
               {turn.role === "assistant" && said ? byline(turn.id) : null}
             </YStack>
           );
@@ -1919,72 +1911,20 @@ function Thread({
         // The transcript reads at the same measure. `Thread` defaults to 768
         // itself; handing it the column here is what lets Width reach it.
         column={{ maxW: MEASURE }}
-        composer={{
+        composer={prompt({
           value: draft,
           onChange: setDraft,
           onSend: submit,
-          // A CHARACTER IS WHO YOU ARE WRITING TO, so the field says so — and
-          // `label` keeps the accessible name constant while it does, which is
-          // the reason the component ships both: a placeholder that changes with
-          // the room would otherwise rename the control every time you switch.
+          onStop: chat.stop,
+          busy: chat.streaming,
+          // Files alone are a message: what is held goes with an empty draft too.
+          ready: Boolean(draft.trim() || files.length),
+          // A CHARACTER IS WHO YOU ARE WRITING TO, so the field says so, and
+          // `label` keeps the accessible name constant while it does.
           placeholder: room.length ? `Message ${join(room)}` : placeholder,
           label: ASK,
-          // CENTRED WHILE NOTHING HAS BEEN SAID, docked once something has —
-          // `center` on the surface, which spaces the pair from outside it,
-          // because with a foot the composer is a shell around this frame and
-          // a margin given here would land inside the shell.
-          // THE SAME MEASURE THE REST OF THIS FILE READS AT. The transcript's
-          // text sits at the measure less its own 0.75rem gutters, so the field
-          // is that wide too and its edges line up with the words above it.
-          width: "calc(100% - 32px)",
-          maxW: `calc(${MEASURE} - 1.5rem)`,
-          mx: "auto",
-          ...(framed ? pane() : null),
-          // THE COMPONENT'S OWN SHAPE, and nothing here reaching into it.
-          //
-          // This carried about twenty style props that rebuilt it into a single
-          // capsule: `flexDirection: "row"` above all, which lays the footer row
-          // BESIDE a `flex: 1` field instead of under it. The footer row has no
-          // width of its own in that arrangement, so send left the viewport at
-          // every size but the widest — measured at 1280 it ended at 1315, at
-          // 834 at 902, at 390 at 466, and on a phone the field stood 200px tall
-          // where a line is 24. Each override was answering damage from the one
-          // before it.
-          //
-          // Composer is a field over a footer row. CHOOSING a model is a
-          // preference and not part of every message, so Settings owns the
-          // choice — but the row still NAMES what is about to answer, because
-          // `served()` may not send what was asked for.
-          //
-          // That fallback is written against this: a preference the gateway
-          // does not carry gives way to a model it does, "because a chat that
-          // works on a model the reader can see beats a chat that refuses on a
-          // name nobody serves". Measured on production, neither `enso` nor
-          // `free` is in the catalogue — every turn lands on the first served
-          // model — so without this the substitution happens in silence and the
-          // sentence justifying it is not true.
-          //
-          // Pressing it opens the pane that owns the choice, which is the one
-          // place to change it.
-          // Everything that is not the field, at the end of the row: Enso, the
-          // mic, send. Send is drawn here because this slot replaces the
-          // package's button and `streaming` still has to become stop; it keeps
-          // `data-slot="composer-send"` so a driver finds it, and it is the same
-          // `Control` circle as the mic, filled.
-          // THE PAPERCLIP is the column's "Attach files", one press closer: the
-          // same `take`, into the same `hold`.
-          children: (
-            <Tooltip>
-              <TooltipTrigger>
-                <Control type="button" size={ROUND} aria-label="Attach files" onClick={() => take(at, via)}>
-                  <Paperclip size={15} aria-hidden />
-                </Control>
-              </TooltipTrigger>
-              <TooltipContent>
-                <Text fontSize="$2">Attach files</Text>
-              </TooltipContent>
-            </Tooltip>
-          ),
+          // In the app's frame the composer floats on the pane as a pane of its own.
+          framed,
           // A file or an image pasted into the field is held like a picked one;
           // words paste as words.
           field: {
@@ -1994,14 +1934,14 @@ function Thread({
               void hold(at, Array.from(e.clipboardData.files), via);
             },
           },
-          // WHAT GOES WITH THE MESSAGE, above the frame: one chip a file, each
-          // with its own remove, and the reason any file was refused.
+          // WHAT GOES WITH THE MESSAGE, above the frame and at its width: the
+          // pause and its ways past, one chip a file, and talk mode's words.
           head:
             files.length || turnedAway || preparing || talk.open || talk.refusal || pause ? (
-              <YStack width="calc(100% - 32px)" maxW={`calc(${MEASURE} - 1.5rem)`} mx="auto" gap="$1.5">
+              <>
                 {/* TURNED AWAY: what is used and until when, the ways past it, and
-                    the usage page — the shell's Settings pane, or at `/` the
-                    builder's Usage (dev.tsx answers the request there). */}
+                    the usage page — the shell's Settings pane, or the builder's
+                    Usage (dev.tsx answers the request there). */}
                 {banner ? (
                   <LimitedBanner message={banner.message} actions={banner.actions} onAction={act} onUsage={() => showSettings("usage")} />
                 ) : null}
@@ -2045,59 +1985,17 @@ function Thread({
                           : "Connecting…"}
                   </Text>
                 ) : null}
-              </YStack>
+              </>
             ) : undefined,
-          send: (
-            <XStack items="center" gap="$2">
-              <Enso
-                effort={effort}
-                onEffort={setEffort}
-                model={wanted}
-                onModel={choose}
-                models={listed}
-                limits={limits}
-              />
-              <Control asChild size={ROUND}>
-                <Voice voice={voice} says={{ idle: "Dictate", listening: "Dictating — click to stop" }}>
-                  {(state) => (
-                    <Mic
-                      size={15}
-                      fill={state === "idle" ? "none" : "currentColor"}
-                    />
-                  )}
-                </Voice>
-              </Control>
-              <Control asChild size={ROUND}>
-                <Voice
-                  voice={talk}
-                  data-slot="composer-talk"
-                  says={{
-                    idle: "Talk with Hanzo",
-                    listening: "In conversation — click to hang up",
-                    speaking: "Hanzo is speaking — talk to interrupt",
-                  }}
-                >
-                  {() => <AudioLines size={15} />}
-                </Voice>
-              </Control>
-              <Control
-                type="button"
-                size={ROUND}
-                fill
-                data-slot="composer-send"
-                aria-label={chat.streaming ? "Stop" : "Send"}
-                opacity={chat.streaming || draft.trim() || files.length ? 1 : 0.4}
-                onClick={() => (chat.streaming ? chat.stop() : submit())}
-              >
-                {chat.streaming ? (
-                  <Square size={13} fill="currentColor" />
-                ) : (
-                  <ArrowUp size={15} strokeWidth={2.5} />
-                )}
-              </Control>
-            </XStack>
-          ),
-        }}
+          // THE PAPERCLIP is the Sources tab's "Attach files", one press closer:
+          // the same `take`, into the same `hold`.
+          onAttach: () => take(at, via),
+          // The one model-and-effort chip Dev's composer has (@hanzo/build).
+          mind,
+          limits,
+          voice,
+          talk,
+        })}
       />
       {/* The crew sits under the composer: who you can talk to, and the
           outline that makes one more. Below the field rather than in the hero
@@ -2191,139 +2089,6 @@ function Consent({
         <Anchor href={site("/legal/privacy")}>Privacy</Anchor>
       </Text>
     </YStack>
-    </YStack>
-  );
-}
-
-function Work({
-  persona,
-  room,
-  model,
-  messages,
-}: {
-  persona: { name: string; description?: string } | null;
-  /** Everyone in the conversation: each of them answers what is asked of them. */
-  room: string[];
-  model: string;
-  messages: ChatMessage[];
-}) {
-  const done = useMemo(() => {
-    // A result arrives as its own turn, keyed back to the call that asked for
-    // it — so the pairing is a lookup and not an assumption about order.
-    const back = new Map<string, string>();
-    for (const m of messages) {
-      if (m.role === "tool" && m.tool_call_id) {
-        back.set(m.tool_call_id, typeof m.content === "string" ? m.content : "");
-      }
-    }
-    return messages
-      .flatMap((m) => m.tool_calls ?? [])
-      .map((call) => ({
-        id: call.id,
-        name: call.function.name,
-        asked: call.function.arguments,
-        got: back.get(call.id) ?? null,
-      }));
-  }, [messages]);
-
-  /**
-   * WHAT THE CONVERSATION MADE.
-   *
-   * A fenced block in an answer is a thing rather than a sentence — a file, a
-   * command, a page — and read inline it scrolls away with the talk. Here it
-   * keeps a label and a copy control, which is what somebody came to a code
-   * block to do.
-   *
-   * Read from the turns rather than tracked as it arrives: the transcript is
-   * already the record, and a second list of what was made would be a second
-   * thing to keep in step with it.
-   */
-  const made = useMemo(() => {
-    const out: { id: string; language: string; code: string }[] = [];
-    for (const m of messages) {
-      if (m.role !== "assistant") continue;
-      const text = typeof m.content === "string" ? m.content : "";
-      for (const block of text.matchAll(/```([\w.+-]*)\n([\s\S]*?)```/g)) {
-        const code = block[2].replace(/\s+$/, "");
-        if (code) out.push({ id: `${m.id}-${out.length}`, language: block[1] || "text", code });
-      }
-    }
-    return out;
-  }, [messages]);
-
-  return (
-    <YStack p="$3" gap="$4">
-      <YStack gap="$1">
-        <Text fontSize="$1" color="$soft" textTransform="uppercase">
-          Answering
-        </Text>
-        {room.length ? (
-          room.map((name) => (
-            <XStack key={name} items="center" gap="$2">
-              <Face name={name} size={22} />
-              <Text fontSize="$2" color="$ink" numberOfLines={1}>
-                {name}
-              </Text>
-            </XStack>
-          ))
-        ) : (
-          <Text fontSize="$2" color="$ink" numberOfLines={1}>
-            {model}
-          </Text>
-        )}
-        {room.length === 1 && persona ? (
-          <Text fontSize="$1" color="$soft" numberOfLines={3}>
-            {persona.description || model}
-          </Text>
-        ) : null}
-      </YStack>
-
-      {made.length > 0 ? (
-        <YStack gap="$2">
-          <Text fontSize="$1" color="$soft" textTransform="uppercase">
-            Artifacts
-          </Text>
-          {made.map((one) => (
-            <Code key={one.id} language={one.language} value={one.code}>
-              {one.code}
-            </Code>
-          ))}
-        </YStack>
-      ) : null}
-
-      <YStack gap="$2">
-        <Text fontSize="$1" color="$soft" textTransform="uppercase">
-          Work
-        </Text>
-        {done.length === 0 ? (
-          <Text fontSize="$2" color="$soft">
-            Nothing was looked up for this conversation yet.
-          </Text>
-        ) : (
-          done.map((call) => (
-            <YStack
-              key={call.id}
-              gap="$1"
-              p="$2"
-              rounded="$3"
-              borderWidth={1}
-              borderColor="$borderColor"
-            >
-              <Text fontSize="$2" color="$ink">
-                {call.name}
-              </Text>
-              <Text fontSize="$1" color="$soft" numberOfLines={2}>
-                {call.asked}
-              </Text>
-              {/* A call still in flight has no answer yet, which is a state and
-                  reads as one. */}
-              <Text fontSize="$1" color="$soft" numberOfLines={6}>
-                {call.got ?? "Running…"}
-              </Text>
-            </YStack>
-          ))
-        )}
-      </YStack>
     </YStack>
   );
 }

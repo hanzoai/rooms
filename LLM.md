@@ -196,12 +196,12 @@ at once. Chat draws no bar; once the reader is turned away one `LimitedBanner`
 over the composer says `paused()`: the plan by name and when it comes back, then
 two ways — Continue with credits (writes `setCreditsAfterAllowance(true)` and
 asks the last question again) where the org holds credit, else Add credits; and
-the upgrade — plus See usage, which opens the shell's Settings → Usage, or at
-`/` the builder's Usage (`useDevHost` answers `showSettings` there). `Enso`'s
-picker marks a paused model "Paused" (its class `limited`, or a `paused` entry
-naming it) and still picks it, and a refusal is said in the thread in the
-server's words. The pure half (`label`, `spent`, `ways`) is
-`@hanzo/build/plan`, so it loads in Node.
+the upgrade — plus See usage, which opens the shell's Settings → Usage, or the
+builder's Usage (`useDevHost` answers `showSettings` there). A switch goes
+through the chip's pick. The model picker marks a paused model "Paused" (its
+class `limited`, or a `paused` entry naming it) and still picks it, and a
+refusal is said in the thread in the server's words. The pure half (`label`,
+`spent`, `ways`) is `@hanzo/build/plan`, so it loads in Node.
 
 ## Voice
 
@@ -231,16 +231,40 @@ label, `SpeakButton`'s, Meet's status line).
 
 ## Models
 
-Every picker here is `@hanzo/ui/models` `ModelPicker` over the whole catalog
-(`parseModels` of `GET /v1/models`): Hanzo's families first, then every maker.
-Chat's `Enso` panel is unscoped — all of it, Kai included, a model that does not
-converse saying what it does — and a listed pick is sent as picked; only a name
-the catalog does not list falls to `served`. The agent form is
-`scope="chat"`. A model's class and family are the catalog's fields, never read
-from its id. A premium pick holds for the conversation and is never remembered
-as the default (`Chat`'s `picked`); Settings' default picker offers no premium
-model. Nothing gates a pick on the plan: the gateway refuses or answers from Enso, and the room shows that. The live web rides a turn whose
-model the catalog files under Enso or Zen (`house`).
+The model and the effort are ONE choice for Chat and Dev, kept in this browser
+by @hanzo/build (`useMind`, `hanzo.mind` = `{model, effort}`, Enso and Medium by
+default). Chat's composer draws @hanzo/build's chip (`Tune`): the effort (Low,
+Medium, High — what `reasoning_effort` and a coding run's `effort` both take;
+a model the catalog lists as not reasoning offers none), a sentence saying
+what serves the ask, and `@hanzo/ui/models` `ModelPicker` over the whole catalog
+(`GET /v1/models`, read once and shared with Dev): Hanzo's families first, then
+every maker. A listed pick is sent as picked; only a name the catalog does not
+list falls to `served`. A model's class and family are the catalog's fields,
+never read from its id. A premium pick holds for the conversation and is never
+kept (`usePick`); Settings' default picker writes the same choice and offers no
+premium model. Nothing gates a pick on the plan: the gateway refuses or answers
+from Enso, and the room shows that. The live web rides a turn whose model the
+catalog files under Enso or Zen (`house`).
+
+## Chat and Dev are drawn alike
+
+- The composer is @hanzo/build's `prompt` (Chat passes it to `@hanzo/ui/chat`
+  `Chat`'s `composer`): the field, then in the frame the paperclip, the chip,
+  dictation, talk and send; as wide as the words above it (`measure`, the
+  prose measure less the thread's gutters); cut as a pane in the app's frame.
+- Under an answer, @hanzo/build's `Reply`: copy the markdown, Listen (the
+  speaker's cast voice, `speakAgent`), and Open what it wrote in the side
+  panel; `Served` says which model answered when it was not the one asked for.
+  Code blocks are `@hanzo/ui/chat` `Code` (`Prose`).
+- The crew's faces stand under the composer only while nothing has been said.
+- The side panel is @hanzo/build's `Panel`: Chat's kinds are Artifacts and
+  Sources (`RightPane.tsx` `useKinds`), page tabs render an artifact from its
+  own bytes, a file or an address. Tabs, order and the chosen one are kept per
+  conversation (`useDeck`, `chat:<channel>`); open or shut is kept on a laptop
+  (`hanzo.side.chat.open`), where the frame's column holds it (`Beside`), and a
+  phone opens it as a sheet. The header's Panel button and ⌘. / Ctrl+. toggle it.
+  An answer that finishes writing a page while the panel is open opens it there.
+- `pane.ts` holds only what goes with the next message (files, refusals).
 
 ## What each app still owns
 

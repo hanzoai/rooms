@@ -41,9 +41,8 @@ import { useModels } from '@hanzo/ai/react'
 import { ModelPicker } from '@hanzo/ui/models'
 import { parseModels } from '@hanzo/ui/models/catalog'
 import { UsagePanel } from '@hanzo/usage/panel'
-import { administers, Credits, label, Plan, Title } from '@hanzo/build'
+import { administers, Credits, label, Plan, Title, useChoice } from '@hanzo/build'
 import { Catalog } from './Directory'
-import { useModel } from './model'
 import { payPage } from './lib/pay'
 import { api } from './lib/api'
 import { renewal, useSubscription, useTier } from './lib/tier'
@@ -259,16 +258,17 @@ function Pane({ id, note }: { id: string; note?: string }) {
 function Model() {
   const { models: served } = useModels()
   const models = useMemo(() => parseModels(served).filter((m) => m.class !== 'premium'), [served])
-  const [model, choose] = useModel()
+  // The one choice Chat and Dev share (@hanzo/build): changed here, changed in both composers.
+  const [choice, choose] = useChoice()
 
   return (
     <YStack gap="$3" maxW={420}>
       <Text fontSize="$3" color="$soft">
-        Used for new chats. An agent with its own model keeps that choice. Premium models are picked per
+        Used for new chats and new runs. An agent with its own model keeps that choice. Premium models are picked per
         conversation in the composer.
       </Text>
       <XStack self="flex-start">
-        <ModelPicker models={models} scope="chat" value={model} onChange={choose} size="sm" />
+        <ModelPicker models={models} scope="chat" value={choice.model} onChange={(id) => choose({ model: id })} size="sm" />
       </XStack>
     </YStack>
   )
