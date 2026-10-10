@@ -22,17 +22,17 @@ vi.mock('@hanzo/gui', () => {
 })
 vi.mock('@hanzo/ui', () => ({ Button: () => null, Dialog: () => null, DialogContent: () => null, DialogTitle: () => null, Input: () => null }))
 vi.mock('@hanzo/ui/glass', () => ({ glass: () => ({}) }))
-vi.mock('@hanzo/usage', () => ({ formatCents: (n: number) => String(n) }))
 vi.mock('@hanzo/iam/react', () => ({ useOrganizations: () => ({ roles: { acme: 'owner' } }) }))
 vi.mock('@hanzo/build', () => ({
+  label: () => null,
+  Meter: () => null,
   path: (r: { kind: string; section?: string; screen?: string }) => (r.kind === 'settings' ? `-/settings/${r.section}` : `-/${r.screen}`),
+  said: () => '',
+  useStanding: () => ({ value: null, error: null, loading: false }),
   useWho: () => ({ open: true, onOpenChange: shut, toggle: () => {} }),
 }))
 vi.mock('./lib/session', () => ({ org: () => 'acme', orgs: () => ['acme'], pick: () => {}, renew: () => {}, scope: () => ({}), superAdmin: () => false }))
-vi.mock('./lib/tier', () => ({ useTier: () => ({ tier: null }) }))
 vi.mock('./lib/org', () => ({ createOrg: async () => '', say: String }))
-vi.mock('./lib/pay', () => ({ payPage: () => '' }))
-vi.mock('./lib/plans', () => ({ planName: () => '' }))
 vi.mock('./Support', () => ({ SupportPicker: () => null }))
 
 import { Me } from './Me'
@@ -53,10 +53,11 @@ afterEach(() => {
 })
 
 describe('the account menu', () => {
-  test('lists API keys between Usage and View all plans', () => {
+  test('lists Billing and API keys between Usage and View all plans, and no balance', () => {
     const labels = menu().rows.map((r) => r.label)
-    const at = labels.indexOf('API keys')
-    expect(labels.slice(at - 1, at + 2)).toEqual(['Usage', 'API keys', 'View all plans'])
+    const at = labels.indexOf('Usage')
+    expect(labels.slice(at, at + 4)).toEqual(['Usage', 'Billing', 'API keys', 'View all plans'])
+    expect(labels).not.toContain('Add funds')
   })
 
   test("API keys closes the menu and opens the organization's keys page, one the app serves", () => {

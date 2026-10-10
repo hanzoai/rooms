@@ -41,17 +41,17 @@ import { useModels } from '@hanzo/ai/react'
 import { ModelPicker } from '@hanzo/ui/models'
 import { parseModels } from '@hanzo/ui/models/catalog'
 import { UsagePanel } from '@hanzo/usage/panel'
+import { administers, Credits, label, Plan, Title } from '@hanzo/build'
 import { Catalog, type Tab } from './Directory'
 import { useModel } from './model'
-import { checkoutUrl, payPage } from './lib/pay'
-import { planName } from './lib/plans'
+import { payPage } from './lib/pay'
 import { api } from './lib/api'
 import { renewal, useSubscription, useTier } from './lib/tier'
-import { paidPlan, setCreditsAfterAllowance, spendShown, useLimits } from './lib/limits'
-import { PlanUsage } from '@hanzo/ui/product/PlanUsage'
+import { spendShown, useLimits } from './lib/limits'
+import { showSettings } from './open'
 import { Look } from './look'
 import { ProviderMark } from './ProviderMark'
-import { org, pick } from './lib/session'
+import { bearer, org, pick } from './lib/session'
 import { site } from './where'
 
 /** A choice among a few: a hairline edge and a corner. The fill and the edge's
@@ -236,7 +236,7 @@ function Pane({ id, note }: { id: string; note?: string }) {
   if (id === 'general') return <Look />
   if (id === 'account') return <Account />
   if (id === 'billing') return <Billing />
-  if (id === 'usage') return <Usage meters />
+  if (id === 'usage') return <Usage />
   if (id === 'keys') return <Keys />
   if (id === 'model') return <Model />
   if (id === 'models') return <Served />
@@ -392,25 +392,39 @@ function Account() {
   )
 }
 
-/** The plan, and the one control that has to leave. */
+/** Where the plan's and billing's reads go: this browser's bearer, in its organization. */
+function useTarget() {
+  const scoped = org()
+  return useMemo(() => ({ api: api(), token: bearer, org: scoped }), [scoped])
+}
+
+/**
+ * The plan and its term, then the credits — @hanzo/build's `Credits`, the one
+ * view every Billing page draws: the balance, grants, auto-reload, this month's
+ * spend and its limit, said to be separate from the plan's usage. Money moves on
+ * the payment host, so adding funds and a card both open it.
+ */
 function Billing() {
   const { isAuthenticated } = useIam()
+  const t = useTarget()
   const { tier } = useTier(isAuthenticated, org())
   const sub = useSubscription(isAuthenticated, org())
-  // WHAT THE CUSTOMER BOUGHT, and its term: a plan is a subscription with usage
-  // limits, so its line is the price and the renewal, never a balance.
-  const plan = tier ? planName(tier.plan) || tier.tier.displayName || tier.tier.name : null
+  if (!isAuthenticated) return <Text fontSize="$3" color="$soft">Sign in to see billing.</Text>
+  // WHAT THE CUSTOMER BOUGHT, by its family: `Max` with `20x` beside it.
+  const plan = tier ? label(tier.plan, tier.tier.name) ?? { name: 'Free', tag: '' } : null
   return (
-    <YStack gap="$4">
-      <Text fontSize="$3" color="$soft">
-        What this account is billed for, and what it has spent.
-      </Text>
+    <YStack gap="$5">
       {plan ? (
-        <Text fontSize="$4" color="$ink">
-          {sub ? `${plan} · ${renewal(sub)}` : plan}
-        </Text>
-      ) : null}
-      <Usage sections={{ overview: true, chart: false, categories: true, breakdown: true, activity: false }} title="Spend" />
+        <YStack gap="$1" data-slot="billing-plan">
+          <Title label={plan} size="$5" />
+          <Text fontSize="$2" color="$soft">
+            {sub ? renewal(sub) : tier?.plan ? 'Your plan.' : 'No paid plan. Usage is paid from credits.'}
+          </Text>
+        </YStack>
+      ) : (
+        <Text fontSize="$3" color="$soft">Reading your plan…</Text>
+      )}
+      <Credits target={t} admin={administers(bearer(), org())} add={payPage()} />
       <Separator />
       <YStack gap="$2">
         <Text fontSize="$2" color="$soft">Payment</Text>
@@ -421,7 +435,7 @@ function Billing() {
         <XStack>
           <Box render={<a href={payPage()} target="_blank" rel="noreferrer" />} {...tap}>
             <XStack items="center" gap="$2" py="$2">
-              <Text fontSize="$3" color="$ink">Manage plan and payment method</Text>
+              <Text fontSize="$3" color="$ink">Manage plan, payment method and invoices</Text>
               <ExternalLink size={13} aria-hidden />
             </XStack>
           </Box>
@@ -432,42 +446,31 @@ function Billing() {
 }
 
 /**
- * The one usage panel every Hanzo product renders, reading as this account — for a
- * reader with no plan. A plan holder's usage is the plan's shares (`meters` draws
- * them, with the plan's terms and its actions, where usage is the subject), never
- * money (spendShown).
+ * Usage: @hanzo/build's `Plan`, the one view every Usage page draws — the plan's
+ * windows and each class of model's share, as shares; the free allowance on
+ * Free; the balance with no plan — and the choice of paying from credits once
+ * the allowance runs out. A reader with no paid plan also sees what was spent,
+ * over time (@hanzo/usage), because money is their meter.
  */
-function Usage({ sections, title, meters = false }: { sections?: Record<string, boolean>; title?: string; meters?: boolean }) {
+function Usage() {
   const { accessToken, isAuthenticated } = useIam()
+  const t = useTarget()
   const read = useLimits(isAuthenticated, org())
 
   if (!isAuthenticated || !accessToken) {
     return <Text fontSize="$3" color="$soft">Sign in to see your usage.</Text>
   }
-  const plan =
-    meters && read.limits ? (
-      <PlanUsage
-        limits={read.limits}
-        plan={planName(read.limits.plan) || undefined}
-        notice={read.notice}
-        onCredits={(on) => setCreditsAfterAllowance(on).then(read.reload)}
-        creditsHref={payPage()}
-        addCreditsHref={checkoutUrl()}
-      />
-    ) : null
-  if (paidPlan(read.limits) || !spendShown(read)) return plan
+  const plan = <Plan target={t} onPlans={() => window.location.assign(site('/pricing'))} onBilling={() => showSettings('billing')} />
+  if (!spendShown(read)) return plan
   // The address is read HERE rather than at import: the panel sends the bearer
   // with every read, and a credentialed read to an absolute address from a page
   // the gateway does not admit dies in preflight — which drew this panel as an
   // account that had spent nothing.
-  const spend = <UsagePanel baseUrl={api()} token={accessToken} sections={sections} title={title} upgrade={payPage()} />
-  return plan ? (
+  return (
     <YStack gap="$6">
       {plan}
-      {spend}
+      <UsagePanel baseUrl={api()} token={accessToken} upgrade={payPage()} title="Spend" />
     </YStack>
-  ) : (
-    spend
   )
 }
 

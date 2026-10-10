@@ -56,7 +56,7 @@ import { Anchor, Box, Button, Text, Tooltip, TooltipContent, TooltipTrigger, Vie
 import { Control } from "@hanzo/composer";
 import { useIam, useIamToken } from "@hanzo/iam/react";
 import { hasSession, org } from "./lib/session";
-import { chats, house, paidPlan, setCreditsAfterAllowance, useLimits } from "./lib/limits";
+import { chats, house, paidPlan, paused, setCreditsAfterAllowance, useLimits } from "./lib/limits";
 import { parseModels } from "@hanzo/ui/models/catalog";
 import { LimitedBanner } from "@hanzo/ui/product/LimitedBanner";
 import type { LimitAction } from "@hanzo/ui/product/limits";
@@ -887,6 +887,8 @@ function Thread({
   const { limits, notice, reload: reread } = useLimits(!anonymous, org(), (id) => nameOf(catalog, id));
   const held = paidPlan(limits);
   const pause = notice && (notice.fallback || notice.refused) ? notice : null;
+  // The banner's words and ways: the plan by name, when it comes back, and the two ways on.
+  const banner = pause ? paused(pause, limits?.plan ?? "", (id) => nameOf(catalog, id)) : null;
   // EVERY MODEL IS CHOSEN, never asked for: one the plan does not cover still
   // picks, and the gateway answers it with the policy's refusal or from Enso,
   // which the room then shows. A turn the gateway refuses `plan_required`
@@ -1386,7 +1388,7 @@ function Thread({
         : failed.empty
           ? `${nameOf(models, model)} answered with nothing.`
           : bill
-            ? notice?.message ?? (bill.message || plainly(wrong, "this conversation"))
+            ? banner?.message ?? notice?.message ?? (bill.message || plainly(wrong, "this conversation"))
             : resign
             ? anonymous
               ? "Sign in to ask this."
@@ -1997,9 +1999,11 @@ function Thread({
           head:
             files.length || turnedAway || preparing || talk.open || talk.refusal || pause ? (
               <YStack width="calc(100% - 32px)" maxW={`calc(${MEASURE} - 1.5rem)`} mx="auto" gap="$1.5">
-                {/* TURNED AWAY: what paused, the ways past it, and the usage page. */}
-                {pause ? (
-                  <LimitedBanner message={pause.message} actions={pause.actions} onAction={act} onUsage={() => showSettings("usage")} />
+                {/* TURNED AWAY: what is used and until when, the ways past it, and
+                    the usage page — the shell's Settings pane, or at `/` the
+                    builder's Usage (dev.tsx answers the request there). */}
+                {banner ? (
+                  <LimitedBanner message={banner.message} actions={banner.actions} onAction={act} onUsage={() => showSettings("usage")} />
                 ) : null}
                 {actWrong ? (
                   <Text role="alert" data-slot="limited-banner-wrong" fontSize="$2" color={BAD}>

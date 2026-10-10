@@ -14,8 +14,13 @@
 // survive a reload, and Back steps through them. A move is a native history
 // entry, which the Next router folds into `usePathname`, so reading the address
 // and moving it are one path.
+//
+// A PANE THAT ASKS FOR SETTINGS (`showSettings`, open.ts) is answered here: the
+// rooms' shell draws its own Settings pane, and the app at `/` has none, so
+// Chat's "See usage" opens the builder's Usage — the page the account menu's
+// Usage opens — rather than nothing.
 
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useLook, useRooms } from './host'
 import { useIam } from '@hanzo/iam/react'
 import { useSignOut } from './lib/signout'
@@ -25,6 +30,7 @@ import { enter } from './lib/destination'
 import { api } from './lib/api'
 import { app, under } from './lib/host'
 import { link } from './lib/tags'
+import { showSettings, useOpen } from './open'
 
 /** Where the builder links out: every one of them an address of this site. */
 const LINKS: Host['links'] = {
@@ -47,6 +53,16 @@ export function useDevHost(): Host {
   const { router, path: pathname } = useRooms()
   const here = canonical(under(pathname))
   const look = useLook()
+  const { settings } = useOpen()
+
+  // The builder names every Settings section the rooms' pane does that it has;
+  // one it does not have opens Settings itself.
+  useEffect(() => {
+    if (!settings) return
+    showSettings(null)
+    const asked = route(`-/settings/${settings}`)
+    window.history.pushState(null, '', app(path(asked.kind === 'settings' ? asked : { kind: 'settings', section: 'general' })))
+  }, [settings])
 
   // The token's claims change only when the token does: a sign-in, a refresh.
   const memberships = useMemo(() => orgs(), [accessToken]) // eslint-disable-line react-hooks/exhaustive-deps

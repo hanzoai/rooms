@@ -26,12 +26,11 @@
  * A SuperAdmin edits these rows at admin.hanzo.ai (/v1/commerce/plans/entries),
  * and every reader here follows: the build bakes the authority's answer into the
  * pricing snapshot for the first paint, and the page replaces it with the live
- * read. No price in this repo is typed; @hanzo/plans is read only for what the
- * wire does not carry — a plan's name for a slug, and the Free row's models.
+ * read. No price in this repo is typed, and no plan's name: a slug is named by
+ * @hanzo/build's `label` (`max-20x` reads Max, with 20x beside it).
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { subscriptionPlans } from "@hanzo/plans";
 import { where } from "../where";
 import { api } from "./api";
 import { org } from "./session";
@@ -287,29 +286,6 @@ export function saving(plan: SubscriptionPlan): number | null {
   const year = charge(plan, "year");
   if (!month || !year || year >= 12 * month) return null;
   return Math.round((1 - year / (12 * month)) * 100);
-}
-
-/**
- * The catalog's own name for a plan slug — "max-20x" reads as "Max 20x" —
- * or null where the slug is empty or the catalog does not carry it.
- *
- * Read off the published package: a plan's name does not move between a build and the next release the way
- * its price can, so the bundled copy is not a stale answer here the way it
- * would be for money. A reader of `GET /v1/billing/tier`'s `plan` field
- * needs a name and nothing else, so no live fetch is spent proving what the
- * package already states.
- */
-export function planName(slug: string | null | undefined): string | null {
-  if (!slug) return null;
-  const row = (subscriptionPlans as CatalogPlan[]).find((p) => p.id === slug);
-  return row?.name ?? null;
-}
-
-/** The two fields of a published @hanzo/plans row this module reads. */
-interface CatalogPlan {
-  id: string;
-  name: string;
-  entitlements?: Record<string, unknown>;
 }
 
 /**

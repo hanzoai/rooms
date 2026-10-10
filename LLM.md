@@ -153,19 +153,29 @@ Gates: `pnpm typecheck`, `pnpm lint:design` (ratchet in
 
 ## Plan usage
 
+The plan is named, read and drawn once, in @hanzo/build (≥ 0.2.52), and the
+rooms mount it: `label` names a plan by family with its rung as a small tag
+(`max-20x` reads Max, 20x; never a slug or an id), `useStanding` reads the
+tier, the limits, the free allowance and the balance, `Meter` leads every
+account menu (`Me` in the app's column, `Account` in the shell), `Plan` is
+Settings → Usage and `Credits` is Settings → Billing. A plan's meter is its
+session, day and month as shares, never money; Free reads the free allowance
+left today; only an account with no plan and money in its balance sees the
+balance, its meter. Credits live in Billing only.
+
 `lib/limits.ts` is @hanzo/ui's `useLimits` reading `GET /v1/ai/limits` with
 `scope()`; `lib/served.ts` hands every `/v1/chat/{completions,public}` answer to
 `observe`, so `X-Hanzo-Usage`/`-Fallback` and a `billing_error` refusal update it
-at once. Chat draws no bar and no near note; once the reader is turned away (a
-fallback reply or a billing refusal) one `LimitedBanner` over the composer carries
-the server's actions in its order — Continue with credits writes
-`setCreditsAfterAllowance(true)` and asks the last question again on the reader's
-pick, a switch goes through `choose` — plus See usage. `Enso`'s picker marks a
-paused model "Paused" (its class `limited`, or a `paused` entry naming it) and
-still picks it, and a refusal is said in the thread in the server's words.
-Settings → Usage (also the account menu's Usage) draws `PlanUsage` with the
-credits switch. `paidPlan` decides whether limits name a paid plan (the free plan
-answers `"free"`). Shares only: no amount, count or cap is drawn anywhere.
+at once. Chat draws no bar; once the reader is turned away one `LimitedBanner`
+over the composer says `paused()`: the plan by name and when it comes back, then
+two ways — Continue with credits (writes `setCreditsAfterAllowance(true)` and
+asks the last question again) where the org holds credit, else Add credits; and
+the upgrade — plus See usage, which opens the shell's Settings → Usage, or at
+`/` the builder's Usage (`useDevHost` answers `showSettings` there). `Enso`'s
+picker marks a paused model "Paused" (its class `limited`, or a `paused` entry
+naming it) and still picks it, and a refusal is said in the thread in the
+server's words. The pure half (`label`, `spent`, `ways`) is
+`@hanzo/build/plan`, so it loads in Node.
 
 ## Voice
 

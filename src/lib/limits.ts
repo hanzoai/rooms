@@ -9,8 +9,9 @@
  * bearer is the subject and `X-Org-Id` the organization this browser works in.
  */
 
+import { label, said, spent, ways, when } from '@hanzo/build/plan'
 import { useLimits as useHeld, type UseLimits } from '@hanzo/ui/product/useLimits'
-import { paidPlan } from '@hanzo/ui/product/limits'
+import { paidPlan, type LimitAction, type LimitNotice } from '@hanzo/ui/product/limits'
 import { api } from './api'
 import { scope } from './session'
 
@@ -54,6 +55,32 @@ export const spendShown = ({ limits, answered }: Pick<UseLimits, 'limits' | 'ans
   answered && !paidPlan(limits)
 
 export { paidPlan }
+
+/**
+ * What the banner over the composer says once the reader is turned away, and
+ * the ways on. A spent allowance is said by the plan's name and when it comes
+ * back — `Your Max 20x plan’s included premium model usage is used until 5:00
+ * PM.` — and a spent request window the same way; any other refusal in the
+ * server's own words. The ways are @hanzo/build's `ways`: continue with credits
+ * where the org holds some, else add credits; then the upgrade.
+ */
+export function paused(
+  n: LimitNotice,
+  plan: string,
+  name: (id: string) => string = (id) => id,
+  now: number = Date.now(),
+): { message: string; actions: LimitAction[] } {
+  const l = label(plan)
+  const until = when(n.resets_at ?? '', now)
+  const on = n.fallback ? ` You’re chatting on ${name(n.fallback)}.` : ''
+  const message =
+    n.reason === 'plan_allowance_used' || (!n.reason && n.classes.length > 0)
+      ? spent(l, n.classes, n.resets_at ?? '', now) + on
+      : n.reason === 'usage_cap_exceeded'
+        ? `Your ${l ? `${said(l)} plan’s` : 'plan’s'} requests are used${until ? ` until ${until}` : ''}.${on}`
+        : n.message
+  return { message, actions: ways(n.actions) }
+}
 
 /** Whether a catalog family is one of Hanzo's chat families, Enso or Zen, whose turns carry the live web. */
 export const house = (family: string | undefined): boolean => family === 'enso' || family === 'zen'

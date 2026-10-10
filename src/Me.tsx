@@ -6,32 +6,36 @@
 // name, and their role in the organization they work in. The menu lists every
 // organization the token names — the personal one first, with its plan — and
 // switches with `pick()` (lib/auth/session.ts), the one switch the app has.
+//
+// THE PLAN LEADS: @hanzo/build's `Meter`, the block every account menu opens
+// with — the plan by its family (`Max` with `20x` beside it) and, on a plan, its
+// windows as shares; the free allowance left today on Free; the balance only
+// for an account with no plan, whose meter it is. Credits are Billing's, so a
+// plan never sits beside a balance here.
+//
 // Under the list: Create organization, Organization settings, and Hanzo Team —
 // opened in the same organization for a team, offered as "Create a team" for a
-// personal one. Then the balance with Add funds, Settings, Usage, API keys, the
-// plans, help and Log out. A SuperAdmin also gets All organizations (support mode).
+// personal one. Then Settings, Usage, Billing, API keys, the plans, help and Log
+// out. A SuperAdmin also gets All organizations (support mode).
 //
 // IAM is the source of every fact here: names and roles from the token's `orgs`
 // claim, display names and which org is personal from `GET /v1/iam/organizations`,
-// the plan and balance from billing. An organization is created by the same
+// the plan from billing and the limits. An organization is created by the same
 // `POST /v1/account/orgs` the no-organization gate uses (components/workspace/
 // Orgs.tsx); the next load mints a token that carries it.
 
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { Popover, SizableText, View, XStack, YStack } from '@hanzo/gui'
-import { Building2, ChevronsUpDown, ExternalLink, Gauge, KeyRound, LifeBuoy, LogOut, Plus, Settings, Sparkles, Users, X } from 'lucide-react'
-import { path, useWho, type Host } from '@hanzo/build'
+import { Building2, ChevronsUpDown, CreditCard, ExternalLink, Gauge, KeyRound, LifeBuoy, LogOut, Plus, Settings, Sparkles, Users, X } from 'lucide-react'
+import { label, Meter, path, said as spoken, useStanding, useWho, type Host } from '@hanzo/build'
 import { useOrganizations } from '@hanzo/iam/react'
 import { Button, Dialog, DialogContent, DialogTitle, Input } from '@hanzo/ui'
 import { glass } from '@hanzo/ui/glass'
-import { formatCents } from '@hanzo/usage'
 import { api } from './lib/api'
 import { createOrg, say } from './lib/org'
-import { useTier, type Tier } from './lib/tier'
+import type { Tier } from './lib/tier'
 import { list } from './lib/list'
 import { org as current, orgs, pick, renew, scope, superAdmin } from './lib/session'
-import { payPage } from './lib/pay'
-import { planName } from './lib/plans'
 import { ENTRY } from './lib/host'
 import { where } from './where'
 import { SupportPicker } from './Support'
@@ -66,8 +70,8 @@ export const initials = (name: string): string =>
     .map((w) => w.charAt(0).toUpperCase())
     .join('') || '?'
 
-/** The plan's name as billing sells it. */
-const planOf = (tier: Tier | null): string => (tier ? planName(tier.plan) || tier.tier?.displayName || tier.tier?.name || '' : '')
+/** The plan by its family, `Max 20x`, from a tier answer; '' with no plan. */
+const planOf = (tier: Tier | null): string => (tier ? spoken(label(tier.plan, tier.tier?.name)) : '')
 
 /**
  * The token's organizations with IAM's rows beside them: display name, and which
@@ -245,9 +249,10 @@ export function Me({
   const all = useOrgs(current)
   const here = all.find((o) => o.name === current) ?? null
   const personal = all.find((o) => o.personal) ?? null
-  const { tier } = useTier(menu.open, current)
+  const target = useMemo(() => ({ api: host.api, token: host.token, org: host.org }), [host.api, host.token, host.org])
+  const read = useStanding(target, menu.open)
   const other = usePlan(personal && personal.name !== current ? personal.name : null, menu.open)
-  const planFor = (o: Org) => (o.name === current ? planOf(tier) : o.personal ? other : '')
+  const planFor = (o: Org) => (o.name === current ? spoken(read.value?.label ?? null) : o.personal ? other : '')
   const who = host.person?.name || host.person?.email || ''
   const standing = [said(here?.role ?? ''), here?.display ?? current].filter(Boolean).join(' · ')
 
@@ -321,6 +326,12 @@ export function Me({
               {host.person.email || who}
             </SizableText>
             <Rule />
+            <Meter
+              read={read}
+              onPlans={() => go(path({ kind: 'screen', screen: 'plans' }))}
+              onBilling={() => go(path({ kind: 'settings', section: 'billing' }))}
+            />
+            <Rule />
             <Label>Organizations</Label>
             <YStack role="group" aria-label="Organizations" gap={2}>
               {all.map((o) => (
@@ -354,15 +365,9 @@ export function Me({
               <Item icon={<Building2 size={15} aria-hidden />} label="All organizations" onPress={() => (menu.onOpenChange(false), setSupporting(true))} />
             ) : null}
             <Rule />
-            <Item
-              icon={<Sparkles size={15} aria-hidden />}
-              label="Add funds"
-              sub={typeof tier?.balance?.effectiveAvailable === 'number' ? `Credits ${formatCents(tier.balance.effectiveAvailable)}` : 'Credits'}
-              onPress={() => (menu.onOpenChange(false), window.open(payPage(), '_blank', 'noopener'))}
-              trail={<ExternalLink size={13} aria-hidden opacity={0.6} />}
-            />
             <Item icon={<Settings size={15} aria-hidden />} label="Settings" onPress={() => go(path({ kind: 'settings', section: 'general' }))} />
             <Item icon={<Gauge size={15} aria-hidden />} label="Usage" onPress={() => go(path({ kind: 'settings', section: 'usage' }))} />
+            <Item icon={<CreditCard size={15} aria-hidden />} label="Billing" onPress={() => go(path({ kind: 'settings', section: 'billing' }))} />
             <Item icon={<KeyRound size={15} aria-hidden />} label="API keys" onPress={() => (menu.onOpenChange(false), window.location.assign(KEYS))} />
             <Item icon={<Sparkles size={15} aria-hidden />} label="View all plans" onPress={() => go(path({ kind: 'screen', screen: 'plans' }))} />
             <Item icon={<LifeBuoy size={15} aria-hidden />} label="Get help" onPress={() => (menu.onOpenChange(false), window.open(DOCS, '_blank', 'noopener,noreferrer'))} />
