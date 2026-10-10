@@ -928,9 +928,9 @@ function Thread({
     // upstream that does not read `reasoning_effort` answers as it would have,
     // the way it does for `temperature`.
     // THE LIVE WEB rides every signed-in turn on an Enso or Zen model: the two
-    // lookups the platform's assistant uses, run inside the completion by the
-    // client's fetch (lib/web.ts), so a question about the weather or the news
-    // is answered from what the web says now.
+    // web tools mark the turn, and the client's fetch (lib/web.ts) looks it up
+    // before the model is asked and asks without them, so a question about the
+    // world, in any language, is answered from what the web says now and streams.
     params: { reasoning_effort: mind.effort, ...(!anonymous && house(rowOf(model)?.family) ? { tools: WEB } : {}) },
     ...(open ? { thread: open } : {}),
     onError: (e) => {

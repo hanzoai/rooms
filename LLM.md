@@ -203,6 +203,36 @@ class `limited`, or a `paused` entry naming it) and still picks it, and a
 refusal is said in the thread in the server's words. The pure half (`label`,
 `spent`, `ways`) is `@hanzo/build/plan`, so it loads in Node.
 
+## The live web
+
+`lib/web.ts` `researched` is the client's fetch. A turn on an Enso or Zen model
+carries `WEB` as a mark; the turn is looked up BEFORE the model is asked —
+`POST /v1/websearch {q, language}` with the top two pages read through
+`/v1/crawl`, and the pages the turn names — and the model is asked once WITHOUT
+tools, so the answer streams: the gateway answers a request that offers tools
+whole. The model asks for no lookups of its own.
+
+- Search is the default. `needs` skips only code, arithmetic, a passage set
+  under a short instruction ending in a colon (200+ characters of prose, not a
+  list, no question mark anywhere in the turn), a greeting, and a turn carrying
+  files (attached or carried) or a picture, whose words never go to an outside
+  engine. It reads the text's shape, never topic words: a list of English "now"
+  words passed over "чума россия новости".
+- Links the person points at (a short line, not inside a quote) are read first;
+  a question about them also searches. `opened` reads an address by its parts,
+  never words inside them: a path segment that is an action (accept,
+  unsubscribe, resetpassword…) or carries another address, an action as a query
+  value, a click/unsubscribe relay host, or a user name keeps it closed, and the
+  model is told it was withheld; otherwise it opens without its credential and
+  tracker parameters (t, token, fbclid, long opaque values). A query says an
+  address as its host and path words (a withheld one as its host alone), never
+  its query string. `language` reads the script, then the commonest words, then
+  the reader's languages.
+- What was found goes at the END OF THE LEADING SYSTEM TURN, between random
+  markers. Not a system turn of its own: hanzoai/ai's text pipeline keeps only
+  the last system turn and would drop the room's. Not the user turn: `enso-auto`
+  routes on `lastUserText`. The empty-answer re-ask rides there too.
+
 ## Voice
 
 Every voice path runs on `@hanzo/voice` against the platform's speech
