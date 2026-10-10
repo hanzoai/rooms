@@ -15,7 +15,6 @@
  * Two derivations of one name never agree; this is the one derivation.
  */
 
-import { TALK } from './host'
 import { api } from './api'
 
 /** The SDK's own keys, `hanzo_iam_`-prefixed. The far side of a boundary. */
@@ -62,27 +61,14 @@ export function live(): boolean {
 export const APP = 'data-app'
 
 /**
- * An address on `/` that names a place in the app — `?chat` in Chat
- * (lib/host.ts `TALK`; Dev's places are paths under `/dev`, whose own page
- * signs a stranger in). The app is signed-in only, so a reader nobody has
- * signed in is sent to hanzo.id with it rather than shown the landing, and it
- * comes back with them.
+ * `live()`, as the script `/` runs as the first child of its landing
+ * (app/_apex.tsx `[data-landing]`), before the rest of the landing is parsed
+ * (app/page.tsx). A live token marks the document with `APP` and takes the
+ * landing off the page at once, so a signed-in reader is never shown the pitch
+ * on the way to the app. Same keys, same test. An inline style, because this is
+ * decided before any stylesheet or component has run.
  */
-const PLACE = new RegExp(`[?&]${TALK}(?:[=&]|$)`)
-
-/** Whether `search` names a place in the app. */
-export const place = (search: string): boolean => PLACE.test(search)
-
-/**
- * `live()`, and a place in the app, as the script `/` runs as the first child
- * of its landing (app/_apex.tsx `[data-landing]`), before the rest of the
- * landing is parsed (app/page.tsx). Either marks the document with `APP` and
- * takes the landing off the page at once: a signed-in reader is never shown the
- * pitch while the app loads, and a reader on their way to sign in to a place is
- * not shown it while they leave. Same keys, same test. An inline style, because
- * this is decided before any stylesheet or component has run.
- */
-export const BOOT = `try{var t=localStorage.getItem('${ACCESS}'),e=localStorage.getItem('${EXPIRES}');if((t&&(!e||Date.now()<Number(e)))||${PLACE}.test(location.search)){document.documentElement.setAttribute('${APP}','');var l=document.currentScript&&document.currentScript.parentElement;if(l&&l.hasAttribute('data-landing'))l.style.display='none'}}catch(_){}`
+export const BOOT = `try{var t=localStorage.getItem('${ACCESS}'),e=localStorage.getItem('${EXPIRES}');if(t&&(!e||Date.now()<Number(e))){document.documentElement.setAttribute('${APP}','');var l=document.currentScript&&document.currentScript.parentElement;if(l&&l.hasAttribute('data-landing'))l.style.display='none'}}catch(_){}`
 
 /**
  * A RETURNING PERSON IS RECOGNISED WITHOUT GOING ANYWHERE.

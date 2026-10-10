@@ -28,17 +28,16 @@ configure({ site: '', home: '/home', signUp: '/signup', api, iam, key, plans })
 
 ```tsx
 // Where the rooms render (client: host.tsx).
-<Rooms router={useRouter()} search={useSearchParams()} path={usePathname()} route={route} Link={NextLink}>
+<Rooms router={useRouter()} path={usePathname()} route={route} Link={NextLink}>
   <Room mode="cal"><CalScheduler /></Room>
 </Rooms>
 ```
 
-Dev's address is a PATH under `/dev` (lib/host.ts `app`, `under`): `/dev` New,
-`/dev/sess_<id>` a run, `/dev/<org>/<repo>` a project (a repository on the
-forge), `/dev/-/<screen>`, `/dev/<slug>` a deployed site. `useDevHost` reads it
-from `path`; the host serves its one Dev page for every path under `/dev`
-(hanzo.ai: lib/edge.ts `APP`). `dev(ref)` opens Dev on a run, a repository or a
-site from any surface.
+The app's addresses are paths (lib/host.ts, "The app's addresses" below): Chat
+is `/chat[/<id>]`, Dev `/dev[/<place>]`. `useDevHost` reads Dev's place from
+`path`; the host serves its one Chat page and its one Dev page for every path
+under each (hanzo.ai: lib/edge.ts `APP`). `dev(ref)` opens Dev on a run, a
+repository or a site from any surface.
 
 | address | hanzo.ai | hanzo.team |
 |---|---|---|
@@ -135,7 +134,7 @@ Unarchive, Delete. The address of a conversation is `site(talk(id))`; a
 - `src/bots/*` — the Bots room.
 - `src/lib/*` — the workspace's infrastructure, one copy for every host:
   `session`, `destination`, `api`, `ai` (useAi), `account`, `tier`, `limits`,
-  `plans`, `pay` (the pay site and money, apart from the plan catalogue), `share`, `coding`, `todo`, `durable`, `tags`, `host` (estate routing),
+  `plans`, `pay` (the pay site and money, apart from the plan catalogue), `share`, `coding`, `todo`, `durable`, `tags`, `host` (estate routing and the app's addresses),
   `mix`, `hydrated` … Apps import these from the package
   (`@hanzo/rooms/lib/session`) and keep no copy.
 - `src/team.gen.ts` — the core team's persona files as strings, generated from
@@ -150,6 +149,25 @@ Unarchive, Delete. The address of a conversation is `site(talk(id))`; a
   avatars (`assets/bots`). A host serves the directory at its root: it copies
   `@hanzo/rooms/assets` into `public/` on `prebuild`/`predev` and keeps no
   copy in git.
+
+## The app's addresses
+
+`lib/host.ts` is the one module that writes and reads the web app's addresses,
+and they are paths: `/chat`, `/chat/<id>` (`talk`), `/dev` and every builder
+place under it (`app`, from @hanzo/build/route `href`): `/dev/run/<id>`,
+`/dev/projects`, `/dev/projects/<org>/<repo>` a repository,
+`/dev/projects/<slug>` a deployed site, `/dev/issues`, `/dev/artifacts`,
+`/dev/machines`, `/dev/environments`, `/dev/customize[/<tab>]`,
+`/dev/settings[/<section>]` … `place` reads a path back, `go` moves the app with
+a history entry, `dev(ref)` is the door from anywhere (through `site()`), `page`
+folds a record for analytics, and `remember`/`resume` keep the mode `/`
+reopens. Retired addresses — `/?at=`, `/?chat=`,
+`/dev?run=|project=|view=|at=`, and the builder's own grammar under /dev that
+0.1.35–0.1.38 wrote (`/dev/sess_<id>`, `/dev/-/<place>`, `/dev/<org>/<repo>`,
+`/dev/<slug>`) — are answered by the edge with a 301 to their paths (hanzo.ai
+`lib/edge.ts`); nothing here reads them. The rooms' own links to hanzo.team's
+/chat (`/chat?q=`, `/chat?thread=`) are that app's addresses and stay as they
+are.
 
 ## Build and ship
 

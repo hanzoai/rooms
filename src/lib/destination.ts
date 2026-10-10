@@ -24,10 +24,10 @@ import { apex, guest, SIGNIN } from "./host";
 import { SHARED } from "./share";
 import { where } from "../where";
 
-/** The default on the apex: the app, which is `/` for anyone signed in
- *  (app/page.tsx). It answers the case where there is no page to go back to (a
- *  typed /login, a /signup funnel, a stranger who cleared their storage
- *  mid-flight). */
+/** The default on the apex: `/`, which takes anyone signed in to the app, in
+ *  the mode they were last in (lib/host.ts `resume`). It answers the case where
+ *  there is no page to go back to (a typed /login, a /signup funnel, a stranger
+ *  who cleared their storage mid-flight). */
 export const DEFAULT_DESTINATION = "/";
 
 /** Where a sign-in with no page to go back to lands on `hostname`: the app on
@@ -116,8 +116,8 @@ export function door(): string {
 /**
  * Send this reader to sign in, and back to this page after.
  *
- * Every signed-out door into the app is this one call: `/` at a place in the
- * app, /dev, a room. The page is written down, and the browser goes to `to`,
+ * Every signed-out door into the app is this one call: /chat, /dev and every
+ * path under them, a room. The page is written down, and the browser goes to `to`,
  * which asks IAM for an existing session before it draws a form
  * (components/auth/panel.tsx `Gate`). On a `guest` host the same address is asked for on hanzo.ai instead. With no `to`
  * the page is `door()`'s; a control that says "Sign in" names LOGIN.

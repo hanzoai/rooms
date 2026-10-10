@@ -8,17 +8,18 @@
 // to leave. The name drawn at the top left is Hanzo Dev: this host is the
 // dev agent. Chat, on the rooms shell, is Hanzo AI.
 //
-// THE ADDRESS IS THE PATH. Dev is `/dev`, and what it shows is the path under
-// it in the builder's own grammar (lib/host.ts `app`, `under`), so a run, a
-// screen, a Settings section, a Customize tab, the plans and a project all
-// survive a reload, and Back steps through them. A move is a native history
-// entry, which the Next router folds into `usePathname`, so reading the address
-// and moving it are one path.
+// THE ADDRESS IS A PATH. Dev is /dev, and every place the builder shows is a
+// path under it in the builder's real-path grammar (lib/host.ts `app`, `place`;
+// @hanzo/build/route `href`, `parse`): a run, a screen, a Settings section, a
+// Customize tab, the plans and a project all survive a reload, and Back steps
+// through them. The host hands the rooms the path (`<Rooms path>`); a move is a
+// native history entry, which the Next router folds into `usePathname`, so
+// reading the address and moving it are one path.
 //
 // A PANE THAT ASKS FOR SETTINGS (`showSettings`, open.ts) is answered here: the
-// rooms' shell draws its own Settings pane, and the app at `/` has none, so
-// Chat's "See usage" opens the builder's Usage — the page the account menu's
-// Usage opens — rather than nothing.
+// rooms' shell draws its own Settings pane, and the app has none, so Chat's
+// "See usage" opens the builder's Usage — the page the account menu's Usage
+// opens — rather than nothing.
 
 import { useEffect, useMemo } from 'react'
 import { useLook, useRooms } from './host'
@@ -28,7 +29,7 @@ import { administers, path, route, type Host } from '@hanzo/build'
 import { bearer, named, org, orgs, pick } from './lib/session'
 import { enter } from './lib/destination'
 import { api } from './lib/api'
-import { app, under } from './lib/host'
+import { app, go, place } from './lib/host'
 import { link } from './lib/tags'
 import { showSettings, useOpen } from './open'
 
@@ -43,15 +44,18 @@ const LINKS: Host['links'] = {
 /** The person's theme, when they have chosen one the builder can name. */
 const theme = (t: string | undefined): Host['theme'] => (t === 'light' || t === 'dark' || t === 'system' ? t : undefined)
 
-/** The app address a builder path names, canonical; '' for anything that is not one. */
-const canonical = (at: string | null): string => path(route(at ?? ''))
+/** The builder address a pathname names: Dev's place, or New for a path that is not Dev's. */
+const at = (pathname: string | null): string => {
+  const p = pathname ? place(pathname) : null
+  return p?.mode === 'dev' ? p.at : ''
+}
 
 /** The host for a signed-in reader. */
 export function useDevHost(): Host {
   const { user, accessToken } = useIam()
   const logout = useSignOut()
   const { router, path: pathname } = useRooms()
-  const here = canonical(under(pathname))
+  const here = path(route(at(pathname)))
   const look = useLook()
   const { settings } = useOpen()
 
@@ -61,7 +65,7 @@ export function useDevHost(): Host {
     if (!settings) return
     showSettings(null)
     const asked = route(`-/settings/${settings}`)
-    window.history.pushState(null, '', app(path(asked.kind === 'settings' ? asked : { kind: 'settings', section: 'general' })))
+    go(app(path(asked.kind === 'settings' ? asked : { kind: 'settings', section: 'general' })))
   }, [settings])
 
   // The token's claims change only when the token does: a sign-in, a refresh.
@@ -93,16 +97,12 @@ export function useDevHost(): Host {
       person: { name, email, avatar },
       admin: administers(bearer(), scoped),
       path: here,
-      go: (to, how) => {
-        const next = app(canonical(to))
-        if (window.location.pathname === next && !window.location.search) return
-        if (how?.replace) window.history.replaceState(null, '', next)
-        else window.history.pushState(null, '', next)
-      },
+      go: (to, how) => go(app(to), how?.replace),
       links: LINKS,
-      // An address of this site moves in the router; another origin is left in
-      // this tab. platform.hanzo.ai is another product, and a click that names
-      // it stays here — everything the builder had it for is in its Settings.
+      // An address of the app moves the app, another of this site moves in the
+      // router, and another origin is left in this tab. platform.hanzo.ai is
+      // another product, and a click that names it stays here — everything the
+      // builder had it for is in its Settings.
       open: (href) => {
         let url: URL
         try {
@@ -111,8 +111,10 @@ export function useDevHost(): Host {
           return
         }
         if (url.hostname === 'platform.hanzo.ai') return
-        if (url.origin === window.location.origin) router.push(`${url.pathname}${url.search}${url.hash}`)
-        else window.location.assign(link(url.href))
+        const to = `${url.pathname}${url.search}${url.hash}`
+        if (url.origin !== window.location.origin) window.location.assign(link(url.href))
+        else if (place(url.pathname)) go(to)
+        else router.push(to)
       },
       signIn: () => enter(),
       signOut: () => void logout(),
