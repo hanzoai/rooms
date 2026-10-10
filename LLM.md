@@ -75,6 +75,14 @@ site from any surface.
 
 ## Rules the rooms keep
 
+- No place hides behind a More. Column draws Dev's places from @hanzo/build's
+  `nav` (≥ 0.2.52), the one list every rail draws, each a row under a quiet
+  group label (Work, Make, Run, Setup); Shell draws its Setup rows the same way,
+  under the rooms. Collapsed, Column keeps every place as a mark.
+- Skills, connectors, plugins and agents have one home, Dev's Customize: Shell's
+  Customize row and Settings' Plugins and Skills rows lead there (`app()`), and
+  Directory lists only Works with and Channels. A list is the registry's answer
+  or a plain line saying why there is none — never rows standing in for it.
 - A scroller says `overflowY="auto" overflowX="hidden"` (or the reverse for a
   strip that scrolls sideways), never `overflow="scroll"`: a classic scrollbar
   draws its track and steppers whether or not anything overflows. The bars

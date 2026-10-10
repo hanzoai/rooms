@@ -20,11 +20,13 @@
 // row shown as a small badge, never a section boundary and never a second
 // install flow — one `+` everywhere, branching internally.
 //
-// FOUR TABS, and the channels are tiles. A channel is a provider the org can
+// TWO TABS, and the channels are tiles. A channel is a provider the org can
 // hold an account with, read from `/v1/integrations` — which says whether this
 // deployment can open a connection and whether this org has one — and every
 // tile's button is a call to that registry. The Inbox's "Connect an app" opens
-// this same directory on this tab; there is no second grid.
+// this same directory on this tab; there is no second grid. Skills, plugins and
+// connectors are what an agent brings to a run, and they have one home, Dev's
+// Customize (@hanzo/build); Settings links there rather than drawing a copy.
 //
 // COUNTS ARE DERIVED. The catalog is counted, never typed. None of these
 // registries serves a download figure, so no card draws one: the rows carried
@@ -33,12 +35,12 @@
 // deleted a "600+ integrations" claim for the same reason.
 //
 // SIGNED IN, EACH TAB READS ITS OWN REGISTRY. Apps is this site's public catalog
-// AND the org's connected accounts; Channels, Plugins and Skills are the org's
-// own lists at `/v1/channels`, `/v1/tools/plugins`, `/v1/tools/skills`. Those
-// three need the bearer, so signed-out asks the reader to sign in rather than
-// drawing a catalogue nobody can install from, and a registry that cannot be
-// reached says so and points at the console rather than claiming the list is
-// empty. `null` is unknown; it never means zero.
+// AND the org's connected accounts; Channels is the org's own list at
+// `/v1/integrations`. That one needs the bearer, so signed-out asks the reader to
+// sign in rather than drawing a catalogue nobody can connect from, and a
+// registry that cannot be reached says so rather than claiming the list is
+// empty. Nothing stands in for an answer: no row is drawn that the registry did
+// not send, and none is marked Connected that it did not mark.
 
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowUpRight, Check, Plus, Search, X } from 'lucide-react'
@@ -65,44 +67,19 @@ import { GOOD } from './lib/mix'
 import { site } from './where'
 
 /**
- * The console, which is a PRODUCT ADDRESS rather than an environment.
- *
- * The gateway is `api()` because it moves — a local cloud, the dev server's own
- * proxy — and nine modules got that wrong by freezing it into a const. This one
- * does not move: `platform.hanzo.ai` is written as a literal in
- * `lib/constants/products-metadata.ts`, `lib/data/oss-catalog.ts` and
- * `pricing.json`, no env names it, and `e2e/directory.spec.ts` asserts this
- * exact origin on the links below.
+ * What this directory lists. APPS are what Hanzo works with — the public
+ * catalog, each row a page. CHANNELS are transports: where a conversation
+ * reaches you. Skills and plugins are Customize's (Settings links there).
  */
-const CONSOLE = 'https://platform.hanzo.ai'
-
-/**
- * The four ways this experience is customized, and the whole taxonomy.
- *
- * APPS are connected services — the thing that used to be called Connectors,
- * which named the wire rather than what a reader installs. CHANNELS are
- * transports: where a conversation reaches you. PLUGINS extend the client.
- * SKILLS extend what an agent knows how to do.
- *
- * Order is the ruling's: Apps, Channels, Plugins, Skills.
- */
-export type Tab = 'apps' | 'channels' | 'plugins' | 'skills'
+export type Tab = 'apps' | 'channels'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'apps', label: 'Works with' },
   { id: 'channels', label: 'Channels' },
-  { id: 'plugins', label: 'Plugins' },
-  { id: 'skills', label: 'Skills' },
 ]
 
-/** The org registry each non-apps tab reads, once there is a bearer to read it with. */
-const ENDPOINT: Record<Exclude<Tab, 'apps'>, string> = {
-  // The org-plane catalogue: every provider the platform can connect an account
-  // to, with THIS org's connection and whether the deployment can open one.
-  channels: '/v1/integrations',
-  plugins: '/v1/tools/plugins',
-  skills: '/v1/tools/skills',
-}
+/** The org-plane catalogue: every provider the platform can connect an account to, with THIS org's connection and whether the deployment can open one. */
+const CHANNELS = '/v1/integrations'
 
 /** What an installable row is, whichever list it came from. */
 interface Row {
@@ -148,104 +125,34 @@ const apps = (): Promise<Row[]> =>
     )
     .catch(() => []))
 
-const CHANNELS_CATALOG: Row[] = [
-  { id: 'slack', name: 'Slack', publisher: 'Hanzo Auto', description: 'Bidirectional sync with FoundationDAO & workspace Slack channels and threads.', kind: 'native', available: true, connected: true },
-  { id: 'discord', name: 'Discord', publisher: 'Hanzo Auto', description: 'Bot and webhook integration for community server announcements and chat.', kind: 'native', available: true, connected: true },
-  { id: 'telegram', name: 'Telegram', publisher: 'Hanzo Auto', description: 'Direct messaging bot with instant agent responses and notifications.', kind: 'native', available: true, connected: true },
-  { id: 'teams', name: 'Microsoft Teams', publisher: 'Hanzo Auto', description: 'Enterprise collaboration connector for channels, meetings, and team chats.', kind: 'native', available: true, connected: false },
-  { id: 'whatsapp', name: 'WhatsApp Business', publisher: 'Hanzo Auto', description: 'Conversational agent support over official WhatsApp Business API.', kind: 'native', available: true, connected: false },
-  { id: 'email', name: 'Email (SMTP/IMAP)', publisher: 'Hanzo Auto', description: 'Inbound conversation routing and outbound transactional dispatch.', kind: 'native', available: true, connected: false },
-  { id: 'webhooks', name: 'Webhooks', publisher: 'Hanzo Core', description: 'Custom HTTP payload delivery for real-time external event ingest.', kind: 'native', available: true, connected: true },
-  { id: 'sms', name: 'SMS (Twilio)', publisher: 'Hanzo Auto', description: 'Two-way text message delivery and conversational verification.', kind: 'native', available: true, connected: false },
-  { id: 'x', name: 'X / Twitter', publisher: 'Hanzo Auto', description: 'Direct messages, mentions, and timeline thread monitoring.', kind: 'native', available: true, connected: false },
-  { id: 'linkedin', name: 'LinkedIn', publisher: 'Hanzo Auto', description: 'Company page updates, comments, and direct message handling.', kind: 'native', available: true, connected: false },
-]
-
-const PLUGINS_CATALOG: Row[] = [
-  { id: 'mcp-filesystem', name: 'Filesystem MCP', publisher: 'Model Context Protocol', description: 'Secure local and virtual file access, directory reading, and atomic edits.', kind: 'MCP', connected: true },
-  { id: 'mcp-git', name: 'Git MCP', publisher: 'Model Context Protocol', description: 'Repository inspection, branch management, commit diffing, and git blame.', kind: 'MCP', connected: true },
-  { id: 'mcp-code', name: 'Code & LSP MCP', publisher: 'Hanzo AI', description: 'Language server protocol diagnostics, symbol jump, and semantic search.', kind: 'MCP', connected: true },
-  { id: 'mcp-memory', name: 'Memory & Knowledge Graph MCP', publisher: 'Hanzo AI', description: 'Persistent entity memory, semantic vector store, and recall graph.', kind: 'MCP', connected: true },
-  { id: 'mcp-zen', name: 'Zen Architecture & Review MCP', publisher: 'Hanzo AI', description: 'Frontier reasoning engine, architecture planning, and rigorous code reviews.', kind: 'MCP', connected: true },
-  { id: 'mcp-browser', name: 'Browser & CDP MCP', publisher: 'Hanzo AI', description: 'Headless Chrome DevTools Protocol automation and interactive web tasks.', kind: 'MCP', connected: true },
-  { id: 'mcp-terminal', name: 'Terminal & PTY MCP', publisher: 'Hanzo AI', description: 'Safe shell execution, sandbox command runner, and real-time streaming.', kind: 'MCP', connected: true },
-  { id: 'mcp-playwright', name: 'Playwright MCP', publisher: 'Microsoft', description: 'End-to-end browser automation, screenshots, and visual regression testing.', kind: 'MCP', connected: true },
-  { id: 'mcp-fetch', name: 'Fetch & Curl MCP', publisher: 'Hanzo AI', description: 'Fast HTTP/HTTPS content extraction and markdown web page synthesis.', kind: 'MCP', connected: true },
-  { id: 'mcp-datastore', name: 'Datastore MCP', publisher: 'Hanzo Datastore', description: 'ClickHouse high-performance analytical queries and telemetry exploration.', kind: 'MCP', connected: true },
-]
-
-const SKILLS_CATALOG: Row[] = [
-  { id: 'skill-code-search', name: 'Codebase Search & Navigation', publisher: 'Hanzo Core', description: 'Deep semantic search, rip-grep, and symbol indexing across all project repositories.', kind: 'native', connected: true },
-  { id: 'skill-data-analysis', name: 'Data Science & Statistical Analysis', publisher: 'Hanzo Core', description: 'Automated data exploration, tabular summaries, charting, and statistical tests.', kind: 'native', connected: true },
-  { id: 'skill-git-ops', name: 'Git Workflow & Release Management', publisher: 'Hanzo Core', description: 'Branch creation, conventional commits, PR generation, and release drafting.', kind: 'native', connected: true },
-  { id: 'skill-swarm', name: 'Autonomous Agent Swarm Orchestration', publisher: 'Hanzo Core', description: 'Divide complex tasks across specialized subagents with asynchronous coordination.', kind: 'native', connected: true },
-  { id: 'skill-web-research', name: 'Web Research & Academic Synthesis', publisher: 'Hanzo Core', description: 'Multi-source fact-checking, literature review, and technical paper extraction.', kind: 'native', connected: true },
-  { id: 'skill-sandbox', name: 'Python Sandbox Execution', publisher: 'Hanzo Core', description: 'Isolated execution of Python scripts with visualization and data artifact export.', kind: 'native', connected: true },
-  { id: 'skill-media', name: 'Image & Media Generation', publisher: 'Hanzo Core', description: 'Diffusion generation, UI mockup creation, and media asset transformations.', kind: 'native', connected: true },
-  { id: 'skill-web3', name: 'Smart Contract & EVM Interaction', publisher: 'Hanzo', description: 'Solidity compilation, ABI inspection, EVM deployment, and chain reads.', kind: 'native', connected: true },
-]
-
-function catalogFor(tab: Tab): Row[] {
-  switch (tab) {
-    case 'apps':
-      return []
-    case 'channels':
-      return CHANNELS_CATALOG
-    case 'plugins':
-      return PLUGINS_CATALOG
-    case 'skills':
-      return SKILLS_CATALOG
-  }
-}
-
-/** One title-cased word from a channel/plugin id. */
+/** One title-cased word from a channel id. */
 const title = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
-/** Map each org registry's own shape onto the one Row the card renders. */
-function rowsFor(tab: Tab, j: unknown): Row[] {
+/** The channel registry's own shape, as the one Row the card renders. */
+function channelsOf(j: unknown): Row[] {
   const o = (j ?? {}) as Record<string, unknown[]>
-  if (tab === 'channels') {
-    const rank = (id: string) => {
-      const i = LEAD.indexOf(id)
-      return i < 0 ? LEAD.length : i
-    }
-    return ((o.providers ?? []) as Record<string, unknown>[])
-      .map((p) => {
-        const link = (p.connection ?? {}) as Record<string, unknown>
-        const account = String(link.account ?? link.label ?? '')
-        return {
-          id: String(p.id),
-          name: String(p.name ?? title(String(p.id))),
-          // What the registry knows, in the reader's order of interest: who is
-          // connected, else whether a connection can be opened here at all.
-          publisher: p.connected ? account || 'Connected' : p.available ? String(p.category ?? '') : 'Needs app credentials',
-          description: String(p.description ?? ''),
-          kind: 'native' as const,
-          connected: Boolean(p.connected),
-          available: Boolean(p.available),
-          account,
-        }
-      })
-      .sort((a, b) => rank(a.id) - rank(b.id))
+  const rank = (id: string) => {
+    const i = LEAD.indexOf(id)
+    return i < 0 ? LEAD.length : i
   }
-  if (tab === 'plugins') {
-    return ((o.plugins ?? []) as Record<string, unknown>[]).map((p) => ({
-      id: String(p.name),
-      name: title(String(p.name)),
-      publisher: 'Hanzo',
-      description: `Serves ${((p.prefixes as string[]) ?? []).join(', ') || 'this workspace'}.`,
-      kind: 'native' as const,
-      connected: p.enabled !== false,
-    }))
-  }
-  // skills: the tools list, whichever key the source used.
-  return ((o.tools ?? o.skills ?? []) as Record<string, unknown>[]).map((t) => ({
-    id: String(t.id ?? t.name),
-    name: String(t.name ?? t.id),
-    publisher: String(t.publisher ?? t.author ?? 'You'),
-    description: String(t.description ?? t.summary ?? 'A skill your agents can reach for.'),
-    kind: (t.kind === 'MCP' ? 'MCP' : 'native') as Row['kind'],
-  }))
+  return ((o.providers ?? []) as Record<string, unknown>[])
+    .map((p) => {
+      const link = (p.connection ?? {}) as Record<string, unknown>
+      const account = String(link.account ?? link.label ?? '')
+      return {
+        id: String(p.id),
+        name: String(p.name ?? title(String(p.id))),
+        // What the registry knows, in the reader's order of interest: who is
+        // connected, else whether a connection can be opened here at all.
+        publisher: p.connected ? account || 'Connected' : p.available ? String(p.category ?? '') : 'Needs app credentials',
+        description: String(p.description ?? ''),
+        kind: 'native' as const,
+        connected: Boolean(p.connected),
+        available: Boolean(p.available),
+        account,
+      }
+    })
+    .sort((a, b) => rank(a.id) - rank(b.id))
 }
 
 /**
@@ -326,19 +233,22 @@ export function Directory({
  * why it is exported and takes the tab as a prop.
  */
 export function Catalog({ tab }: { tab: Tab }) {
-  const { isAuthenticated, login, accessToken } = useIam()
+  const { isAuthenticated, accessToken } = useIam()
   const [query, setQuery] = useState('')
-  const [rows, setRows] = useState<Row[]>(() => catalogFor(tab))
-  // Bumped when a card changed a connection, so the registry is read again and
-  // the card shows what the registry now holds rather than what the press hoped.
+  // null until the list is read: unknown is never drawn as empty.
+  const [rows, setRows] = useState<Row[] | null>(null)
+  const [wrong, setWrong] = useState<unknown>(null)
+  // Bumped when a card changed a connection, or a failed read is asked again,
+  // so the registry is read again and the card shows what it now holds.
   const [turn, setTurn] = useState(0)
   const label = TABS.find((t) => t.id === tab)?.label ?? tab
+  const signed = isAuthenticated && Boolean(accessToken)
 
   useEffect(() => {
     let live = true
-    const fallback = catalogFor(tab)
-    setRows(fallback)
-    const auth = isAuthenticated && accessToken ? scope() : null
+    setRows(null)
+    setWrong(null)
+    const auth = signed ? scope() : null
 
     // Apps is this site's own public catalog — real for everyone. Signed in, we
     // also mark which providers the org has actually connected, from the one
@@ -365,25 +275,17 @@ export function Catalog({ tab }: { tab: Tab }) {
     }
 
     if (!auth) return
-    fetch(`${api()}${ENDPOINT[tab]}`, { headers: auth })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => {
-        if (!live || !j) return
-        const liveRows = rowsFor(tab, j)
-        if (liveRows && liveRows.length > 0) {
-          const map = new Map<string, Row>()
-          for (const r of fallback) map.set(r.id, r)
-          for (const r of liveRows) map.set(r.id, { ...(map.get(r.id) || {}), ...r })
-          setRows(Array.from(map.values()))
-        }
+    fetch(`${api()}${CHANNELS}`, { headers: auth })
+      .then((r) => {
+        if (!r.ok) throw refusal(r)
+        return r.json()
       })
-      .catch(() => {
-        // Degrades gracefully to fallback catalog
-      })
+      .then((j) => live && setRows(channelsOf(j)))
+      .catch((e: unknown) => live && setWrong(e))
     return () => {
       live = false
     }
-  }, [tab, isAuthenticated, accessToken, turn])
+  }, [tab, signed, turn]) // eslint-disable-line react-hooks/exhaustive-deps -- scope() reads the same token
 
   // A connection finishes in the provider's own tab. Coming back to this one is
   // the moment to ask the registry again.
@@ -398,12 +300,17 @@ export function Catalog({ tab }: { tab: Tab }) {
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
-    const list = Array.isArray(rows) ? rows : []
-    return list.filter((r) => {
-      if (!q) return true
-      return r.name.toLowerCase().includes(q) || r.description.toLowerCase().includes(q)
-    })
+    return (rows ?? []).filter((r) => !q || r.name.toLowerCase().includes(q) || r.description.toLowerCase().includes(q))
   }, [rows, query])
+
+  const quiet = (text: string, action?: React.ReactNode) => (
+    <YStack gap="$3" py="$4" items="flex-start">
+      <Text fontSize="$3" color="$soft">
+        {text}
+      </Text>
+      {action}
+    </YStack>
+  )
 
   return (
     <YStack gap="$4">
@@ -413,14 +320,30 @@ export function Catalog({ tab }: { tab: Tab }) {
           <Input
             value={query}
             onChangeText={setQuery}
-            placeholder={`Search ${tab}`}
-            aria-label={`Search ${tab}`}
+            placeholder={`Search ${label.toLowerCase()}`}
+            aria-label={`Search ${label.toLowerCase()}`}
             flex={1}
           />
         </XStack>
       </XStack>
 
-      {shown.length > 0 ? (
+      {tab === 'channels' && !signed ? (
+        quiet(
+          'Sign in to see the channels your organization can connect.',
+          <Action render="button" onPress={() => enter()} $touchable={{ minH: 44, minW: 44 }}>
+            Sign in
+          </Action>,
+        )
+      ) : wrong ? (
+        quiet(
+          say(wrong, 'the channels'),
+          <Action render="button" onPress={() => setTurn((n) => n + 1)} $touchable={{ minH: 44, minW: 44 }}>
+            Try again
+          </Action>,
+        )
+      ) : rows === null ? (
+        quiet(`Loading ${label.toLowerCase()}…`)
+      ) : shown.length > 0 ? (
         <>
           <Text fontSize="$3" color="$soft">
             {shown.length} {shown.length === 1 ? 'result' : 'results'}
@@ -438,16 +361,7 @@ export function Catalog({ tab }: { tab: Tab }) {
           </YStack>
         </>
       ) : (
-        <YStack gap="$3" py="$4">
-          <Text fontSize="$3" color="$soft">
-            {query ? `Nothing matches “${query}”.` : `No ${label.toLowerCase()} here yet.`}
-          </Text>
-          {!query ? (
-            <Action href={`${CONSOLE}/${tab}`} target="_blank" rel="noreferrer" $touchable={{ minH: 44, minW: 44 }}>
-              Add in console
-            </Action>
-          ) : null}
-        </YStack>
+        quiet(query ? `Nothing matches “${query}”.` : tab === 'channels' ? 'No channel can be connected here yet.' : 'Nothing is listed yet.')
       )}
     </YStack>
   )
@@ -472,10 +386,9 @@ function RowCard({ row, tab }: { row: Row; tab: Tab }) {
     )
   }
 
-  // Apps open the page this site serves; a plugin or a skill is installed in
-  // the console, which is where its registry is. Only a channel has a flow of
-  // its own, and only that one is a button.
-  const href = tab === 'apps' ? site(`/integrations/${row.id}`) : `${CONSOLE}/${tab}`
+  // Apps open the page this site serves. Only a channel has a flow of its own,
+  // and only that one is a button.
+  const href = site(`/integrations/${row.id}`)
   return (
     <YStack
       gap="$2"

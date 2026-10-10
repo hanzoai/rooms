@@ -139,7 +139,7 @@ import { Face } from "./cast";
 import { useStarred, titleOf } from "./stars";
 import { roomName } from "./network";
 import { useTeamRooms, teamKey, roomHref, type TeamRoom } from "./rooms";
-import { apex, dev, ENTRY, room as moves, WORKSPACE } from "./lib/host";
+import { apex, app, dev, ENTRY, room as moves, WORKSPACE } from "./lib/host";
 import { netKey } from "./conversations";
 import {
   FIRST,
@@ -2017,12 +2017,12 @@ function Frame({
   /**
    * THE SURFACES THAT ARE NOT ROOMS, said once.
    *
-   * Connectors is a page, Skills and Usage are panes of Settings, Terminals is
-   * another product at its own host, Docs is a page. The column groups them
-   * under "More" — where a reader coming from hanzo.app looks — and the palette
-   * offers the same set, so this says WHAT they are and each surface says only
-   * how it draws them. Written twice they had already parted: Settings was in
-   * one list and not the other.
+   * Customize is Dev's page, Usage a pane of Settings, Terminals another
+   * product at its own host, Docs a page. The column draws each as a
+   * row of its own under the quiet label Setup, right under the rooms — nothing
+   * waits behind a More — and the palette offers the same set, so this says
+   * WHAT they are and each surface says only how it draws them. Written twice
+   * they had already parted: Settings was in one list and not the other.
    *
    * ONE VERB PER ROW, and no href beside it. A row that carried both would be
    * two ways to reach one place, and the two would answer differently the day
@@ -2030,20 +2030,17 @@ function Frame({
    */
   const tools = useMemo(
     () => [
+      // CUSTOMIZE is the one home of what an agent brings to a run — skills,
+      // connectors, plugins, agents — in Dev (@hanzo/build). One row leads
+      // there; a second list here would be the second copy that drifts.
       {
-        id: "connectors",
-        label: "Connectors",
+        id: "customize",
+        label: "Customize",
         icon: Blocks,
         go: () => {
-          navigate?.(site("/integrations"));
+          navigate?.(site(app("-/customize")));
           dismiss();
         },
-      },
-      {
-        id: "skills",
-        label: "Skills",
-        icon: Workflow,
-        go: () => showSettings("skills"),
       },
       // TERMINALS ARE TABS, and Tabs is its own product at its own host —
       // hanzo.app's row pointed there too. A new tab for the reason that row
@@ -2147,7 +2144,7 @@ function Frame({
   const workspace = currentOrg?.displayName || currentOrg?.name || "Hanzo";
   const owner = currentOrgId ?? "";
 
-  // The two folders' rows, narrowed by the column's filter like every other list.
+  // The folder's rows and Setup's, narrowed by the column's filter like every other list.
   const products = CONSOLE_PRODUCTS.filter((prod) => matches(prod.label, filter));
   const more = tools.filter((tool) => matches(tool.label, filter));
 
@@ -2253,12 +2250,20 @@ function Frame({
             {place.label}
           </SidebarItem>
         ))}
-        {matches("Settings", filter) ? (
-          <SidebarItem icon={<Settings2 size={16} aria-hidden />} onPress={() => showSettings(FIRST)}>
-            Settings
-          </SidebarItem>
-        ) : null}
       </YStack>
+      {/* SETUP, every row in view. It sat in a "More" folder at the foot of the
+          list, under every conversation, where a first visit never found it. */}
+      {more.length ? (
+        <YStack data-slot="setup-list" px="$2" pb="$2">
+          <SidebarSection label="Setup">
+            {more.map((tool) => (
+              <SidebarItem key={tool.id} icon={<tool.icon size={16} aria-hidden />} onPress={tool.go}>
+                {tool.label}
+              </SidebarItem>
+            ))}
+          </SidebarSection>
+        </YStack>
+      ) : null}
       {/* The local filter stays at the top, where the list it narrows begins. */}
       <XStack px="$3" pb="$2">
         <XStack
@@ -2342,19 +2347,6 @@ function Frame({
               </SidebarFolder>
               ) : null}
 
-              {more.length ? (
-              <SidebarFolder name="More" open={filter ? true : undefined}>
-                {more.map((tool) => (
-                  <SidebarItem
-                    key={tool.id}
-                    icon={<tool.icon size={13} aria-hidden />}
-                    onPress={tool.go}
-                  >
-                    {tool.label}
-                  </SidebarItem>
-                ))}
-              </SidebarFolder>
-              ) : null}
           </>
         </SidebarScroll>
         </>

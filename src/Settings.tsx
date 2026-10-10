@@ -22,7 +22,7 @@
 // The panes that are not yet built say so in one sentence rather than pretending
 // to a screen. An honest empty pane is a smaller lie than an invented one.
 
-import { dev } from './lib/host'
+import { app, dev } from './lib/host'
 import { useMemo, useState } from 'react'
 import { ArrowLeft, ArrowUpRight, ExternalLink } from 'lucide-react'
 import {
@@ -42,7 +42,7 @@ import { ModelPicker } from '@hanzo/ui/models'
 import { parseModels } from '@hanzo/ui/models/catalog'
 import { UsagePanel } from '@hanzo/usage/panel'
 import { administers, Credits, label, Plan, Title } from '@hanzo/build'
-import { Catalog, type Tab } from './Directory'
+import { Catalog } from './Directory'
 import { useModel } from './model'
 import { payPage } from './lib/pay'
 import { api } from './lib/api'
@@ -105,13 +105,15 @@ const GROUPS: Group[] = [
       },
     ],
   },
+  // Plugins and skills are what an agent brings to a run, and Customize is
+  // their one home: these rows lead there rather than drawing a second list.
   {
     label: 'Customize',
     rows: [
       { id: 'apps', label: 'Apps' },
       { id: 'channels', label: 'Channels' },
-      { id: 'plugins', label: 'Plugins' },
-      { id: 'skills', label: 'Skills' },
+      { id: 'plugins', label: 'Plugins', href: site(app('-/customize/plugins')) },
+      { id: 'skills', label: 'Skills', href: site(app('-/customize')) },
       { id: 'memory', label: 'Memory', note: 'Nothing is remembered between conversations yet.' },
     ],
   },
@@ -230,9 +232,7 @@ export function SettingsPane({ id }: { id: string }) {
 
 /** One pane. */
 function Pane({ id, note }: { id: string; note?: string }) {
-  if (id === 'apps' || id === 'channels' || id === 'plugins' || id === 'skills') {
-    return <Catalog tab={id as Tab} />
-  }
+  if (id === 'apps' || id === 'channels') return <Catalog tab={id} />
   if (id === 'general') return <Look />
   if (id === 'account') return <Account />
   if (id === 'billing') return <Billing />

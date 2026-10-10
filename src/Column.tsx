@@ -4,6 +4,9 @@
 // New, Dev's places, the Recents of the mode it is in, and at the foot the
 // account (components/workspace/Me.tsx).
 //
+// Dev's places are @hanzo/build's `nav`, the one list every rail draws, each a
+// row of its own under a quiet group label: nothing waits behind a More.
+//
 // It is a pane on the frame's ground (app/_web.tsx), sized by the edge in the
 // gutter to its right: dragged, keyed or double-clicked back (@hanzo/build's
 // `Grip`), kept per browser. Pulled in past its floor it collapses to a rail of
@@ -11,11 +14,11 @@
 // choice outlives the move.
 
 import { Text, XStack, YStack } from '@hanzo/gui'
-import { ChevronDown, ChevronUp, PanelLeft, Plus, Search } from 'lucide-react'
-import { Grip, nav, route, type Host } from '@hanzo/build'
+import { PanelLeft, Plus, Search } from 'lucide-react'
+import { Grip, nav, NEW, type Host } from '@hanzo/build'
 import { Sidebar, SidebarIconButton, SidebarItem } from '@hanzo/ui/chat'
 import { HanzoMark } from '@hanzogui/shell'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { ModeMark } from './ModeMark'
 import { useKept } from './kept'
 import { Made, Me } from './Me'
@@ -54,8 +57,8 @@ const keys = (press: () => void) => ({
   },
 })
 
-/** A row of the column: a pill, lit where the reader is. */
-const ROW = { rounded: '$4', minH: 34 } as const
+/** A row of the column: a pill, lit where the reader is. Compact, so every place fits a laptop's height with Recents under them. */
+const ROW = { rounded: '$4', minH: 30, py: 0 } as const
 
 export function Column({
   host,
@@ -80,17 +83,16 @@ export function Column({
 }) {
   const [kept, setCollapsed] = useKept('hanzo.build.rail', false)
   const collapsed = kept && !drawer
-  const [unfolded, setUnfolded] = useState(false)
   const [words, setWords] = useState('')
+  // The desktop column and a phone's drawer can both be in the page: each names its own group labels.
+  const uid = useId()
   const span = useSpan(SPAN, WIDTH, FLOOR, CEIL)
 
   const dev = (p: string) => host.go(p)
-  const r = route(host.path)
-  const fresh = mode === 'chat' ? !thread : r.kind === 'new'
-  const { links, more } = nav(host, dev)
+  const groups = nav(host, dev)
   const open = (row: Recent) => (row.kind === 'chat' ? go(talk(row.id)) : dev(row.id))
+  // Chat's New; Dev's is the first of its places.
   const create = () => {
-    if (mode === 'dev') return dev('')
     empty()
     go(talk())
   }
@@ -119,9 +121,22 @@ export function Column({
             <PanelLeft size={16} />
           </SidebarIconButton>
           <ModeMark mode={mode} onChat={onChat} onDev={onDev} stacked />
-          <SidebarIconButton label={mode === 'chat' ? 'New chat' : 'New run'} onPress={create} width={36} height={36} rounded={999}>
-            <Plus size={16} />
-          </SidebarIconButton>
+          {mode === 'chat' ? (
+            <SidebarIconButton label="New chat" onPress={create} width={36} height={36} rounded={999}>
+              <Plus size={16} />
+            </SidebarIconButton>
+          ) : (
+            // Every place, as its mark: collapsed is narrower, never shorter of a destination.
+            groups.map((g) => (
+              <YStack key={g.id} role="group" aria-label={g.label} items="center" gap={2} pt="$1">
+                {g.links.map((link) => (
+                  <SidebarIconButton key={link.id} label={link.label} onPress={() => link.onPress?.()} width={36} height={32} rounded={999} aria-current={link.active ? 'page' : undefined}>
+                    {link.icon}
+                  </SidebarIconButton>
+                ))}
+              </YStack>
+            ))
+          )}
           <YStack flex={1} />
           <Me host={host} narrow onOrg={org} />
         </Sidebar>
@@ -166,7 +181,7 @@ export function Column({
                 onKeyDown={(e) => {
                   if (e.key === 'Escape') setWords('')
                 }}
-                placeholder="Filter"
+                placeholder={mode === 'chat' ? 'Filter chats' : 'Filter runs'}
                 aria-label="Filter recents"
               />
             }
@@ -179,46 +194,42 @@ export function Column({
             fontSize="$2"
           />
         </XStack>
-        <YStack role="list" mt="$2.5" gap={2} shrink={0}>
-          <YStack role="listitem">
-            <SidebarItem data-slot="app-new" {...ROW} active={fresh} icon={<Plus size={16} aria-hidden />} onPress={create} {...keys(create)}>
-              {mode === 'chat' ? 'New chat' : 'New run'}
-            </SidebarItem>
-          </YStack>
-          {mode === 'dev'
-            ? links.map((link) => (
-                <YStack role="listitem" key={link.id}>
-                  <SidebarItem {...ROW} active={link.active} icon={link.icon} onPress={link.onPress} {...keys(() => link.onPress?.())}>
-                    {link.label}
-                  </SidebarItem>
-                </YStack>
-              ))
-            : null}
-          {mode === 'dev' ? (
+        {mode === 'chat' ? (
+          <YStack role="list" mt="$2.5" gap={2} shrink={0}>
             <YStack role="listitem">
-              <SidebarItem
-                {...ROW}
-                aria-expanded={unfolded}
-                icon={unfolded ? <ChevronUp size={16} aria-hidden /> : <ChevronDown size={16} aria-hidden />}
-                onPress={() => setUnfolded((v) => !v)}
-                {...keys(() => setUnfolded((v) => !v))}
-              >
-                More
+              <SidebarItem data-slot="app-new" {...ROW} active={!thread} icon={<Plus size={16} aria-hidden />} onPress={create} {...keys(create)}>
+                New chat
               </SidebarItem>
-              {unfolded ? (
-                <YStack role="list" gap={2}>
-                  {more.map((link) => (
+            </YStack>
+          </YStack>
+        ) : (
+          <YStack data-slot="app-places" mt="$1.5" shrink={0}>
+            {groups.map((g) => (
+              <YStack key={g.id} pt="$1.5">
+                {/* The same quiet label Recents wears, so the column reads as one list of headed parts. */}
+                <Text id={`${uid}-${g.id}`} pl="$2" pb={2} fontSize="$1" color="$soft" fontWeight="600" textTransform="uppercase" letterSpacing={0.6}>
+                  {g.label}
+                </Text>
+                <YStack role="list" aria-labelledby={`${uid}-${g.id}`} gap={1}>
+                  {g.links.map((link) => (
                     <YStack role="listitem" key={link.id}>
-                      <SidebarItem {...ROW} active={link.active} icon={link.icon} onPress={link.onPress} {...keys(() => link.onPress?.())}>
+                      <SidebarItem
+                        {...ROW}
+                        {...(link.id === NEW ? { 'data-slot': 'app-new' } : {})}
+                        active={link.active}
+                        icon={link.icon}
+                        onPress={link.onPress}
+                        {...keys(() => link.onPress?.())}
+                      >
                         {link.label}
                       </SidebarItem>
                     </YStack>
                   ))}
                 </YStack>
-              ) : null}
-            </YStack>
-          ) : null}
-        </YStack>
+              </YStack>
+            ))}
+          </YStack>
+        )}
         <XStack height={1} bg="$borderColor" mx="$1.5" mt="$3" shrink={0} />
         <Recents host={host} mode={mode} thread={thread} words={words} onOpen={open} onNew={create} />
         <YStack gap="$2" pt="$2" shrink={0}>
